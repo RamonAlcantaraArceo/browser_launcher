@@ -1,10 +1,9 @@
-from . import launch
+from .cli import app
 
 
 def main():
     """Entry point for the `browser-launcher` console script."""
-    print("browser_launcher CLI")
-    launch()
+    app()
 
 
 if __name__ == "__main__":
