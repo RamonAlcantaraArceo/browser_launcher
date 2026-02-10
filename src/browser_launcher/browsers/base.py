@@ -50,10 +50,6 @@ class BrowserLauncher(ABC):
         self.logger = logger
         self._driver = None
 
-    def validate_binary(self) -> bool:
-        """WebDriver-based browsers do not require binary validation."""
-        return True
-
     @abstractmethod
     def build_command_args(self, url: str) -> List[str]:
         """Build command-line arguments for launching the browser.

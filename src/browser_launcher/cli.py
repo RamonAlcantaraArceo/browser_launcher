@@ -279,10 +279,6 @@ def launch(
         sys.exit(1)
     
     # Validate binary
-    if not bl.validate_binary():
-        console.print(f"❌ [red]Error:[/red] Browser binary not found or invalid for {selected_browser}")
-        logger.error(f"Browser binary not found or invalid for {selected_browser}")
-        sys.exit(1)
     
     # Determine URL
     launch_url = url or config_loader.get_default_url()
