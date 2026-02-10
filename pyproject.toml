@@ -16,6 +16,7 @@ toml = "^0.10.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0"
+pytest-cov = "^7.0.0"
 
 [tool.poetry.scripts]
 browser-launcher = "browser_launcher.__main__:main"
