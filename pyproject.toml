@@ -12,6 +12,7 @@ python = "^3.10"
 typer = "^0.20.0"
 rich = "^14.2.0"
 selenium = "^4.40.0"
+toml = "^0.10.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0"

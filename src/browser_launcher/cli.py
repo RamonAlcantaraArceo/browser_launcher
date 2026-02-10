@@ -244,75 +244,73 @@ def launch(
     })
     logger.info(f"Starting browser launch - {context}")
     
-    console.print("🚀 Browser launcher functionality")
-    console.print(f"URL: {url or 'Not specified'}")
-    console.print(f"Browser: {browser or 'Default'}")
-    console.print(f"Headless: {headless}")
+    # Load configuration
+    from browser_launcher.config import BrowserLauncherConfig
+    from browser_launcher.browsers.factory import BrowserFactory
     
-    # Log the action being taken
-    logger.debug(f"Launch command received with URL='{url}', browser='{browser}', headless={headless}")
-    can_capture_screenshot = False
-
-    bl = None
-    default_config = BrowserConfig(
-        binary_path=None,
-        headless=False,
-        user_data_dir=None,
-        custom_flags=None,
-        extra_options={}
-    )
-    # TODO: Implement actual browser launching logic
-    if browser == "chrome":
-        bl = ChromeLauncher(config=default_config, logger=logger)
-    elif browser == "firefox":
-        bl = FirefoxLauncher(config=default_config, logger=logger)
-    else:
-        console.print("💡 This is a placeholder - actual browser launching to be implemented")
-        logger.warning("Browser launch functionality not yet implemented - placeholder message shown")
-        return
-
-    bl.launch(url=url)
-
+    try:
+        config_loader = BrowserLauncherConfig()
+    except FileNotFoundError as e:
+        console.print(f"❌ [red]Error:[/red] {e}")
+        logger.error(str(e))
+        sys.exit(1)
+    
+    # Determine browser to use
+    selected_browser = browser or config_loader.get_default_browser()
+    if selected_browser not in BrowserFactory.get_available_browsers():
+        console.print(f"❌ [red]Error:[/red] Unsupported browser: {selected_browser}")
+        logger.error(f"Unsupported browser: {selected_browser}")
+        sys.exit(1)
+    
+    # Get browser config
+    try:
+        browser_config = config_loader.get_browser_config(selected_browser, headless=headless)
+    except Exception as e:
+        console.print(f"❌ [red]Error loading browser config:[/red] {e}")
+        logger.error(f"Error loading browser config: {e}")
+        sys.exit(1)
+    
+    # Instantiate browser launcher
+    try:
+        bl = BrowserFactory.create(selected_browser, browser_config, logger)
+    except Exception as e:
+        console.print(f"❌ [red]Error instantiating browser:[/red] {e}")
+        logger.error(f"Error instantiating browser: {e}")
+        sys.exit(1)
+    
+    # Validate binary
+    if not bl.validate_binary():
+        console.print(f"❌ [red]Error:[/red] Browser binary not found or invalid for {selected_browser}")
+        logger.error(f"Browser binary not found or invalid for {selected_browser}")
+        sys.exit(1)
+    
+    # Determine URL
+    launch_url = url or config_loader.get_default_url()
+    console.print(f"🚀 Launching {selected_browser} at {launch_url}")
+    logger.info(f"Launching {selected_browser} at {launch_url}")
+    
+    # Launch browser
+    try:
+        bl.launch(url=launch_url)
+    except Exception as e:
+        console.print(f"❌ [red]Error launching browser:[/red] {e}")
+        logger.error(f"Error launching browser: {e}")
+        sys.exit(1)
+    
     try:
         typer.echo("Press Ctrl+D (or Ctrl+Z on Windows) to exit.")
-        if can_capture_screenshot:
-            typer.echo("Press 'Enter' to capture a screenshot.")
-
-        # if browser == Browser.safari:
-        #     typer.echo("You will want to select 'Stop Session' to start using that browser instance.")
-
         while True:
             if bl.driver.session_id is None:
                 typer.echo("session has gone bad, you need to relaunch to be able to capture screenshot")
-
-            char = sys.stdin.read(1)  # Read one character at a time
-
-            if not char:  # EOF (Ctrl+D or Ctrl+Z)
+            char = sys.stdin.read(1)
+            if not char:
                 break
-            elif not can_capture_screenshot:
-                continue
-            # elif char.lower() == '\n':
-            #     try:
-            #         screenshot_name = gen.generate()
-            #         _capture_screenshot(
-            #             screenshot_name, driver=driver, delay=0.5,
-            #         )
-            #         typer.echo(f"Captured: {screenshot_name}")
-            #     except InvalidSessionIdException as e:
-            #         typer.echo(f"session has gone bad, you need to relaunch to be able to capture screenshot {type(e)}")
-            #     except NoSuchWindowException as e:
-            #         typer.echo(f"session has gone bad, you need to relaunch to be able to capture screenshot {type(e)}")
-            #     except Exception as e:
-            #         typer.echo(f"session has gone bad, you need to relaunch to be able to capture screenshot {type(e)} {e!r}")
-            #         raise e
-
     except EOFError:
         typer.echo("\nExiting...")
-
     finally:
         try:
             bl.driver.close()
-        except:  # noqa: E722
+        except Exception:
             pass
 
 def safe_get_address(address, driver):

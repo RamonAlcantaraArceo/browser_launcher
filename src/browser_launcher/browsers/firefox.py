@@ -17,13 +17,6 @@ class FirefoxLauncher(BrowserLauncher):
     - Limited experimental options compared to Chrome
     """
 
-    def validate_binary(self) -> bool:
-        """Validate that Firefox binary exists and is executable."""
-        if not self.config.binary_path:
-            return False
-        binary_path = Path(self.config.binary_path)
-        return binary_path.exists() and binary_path.is_file() and bool(binary_path.stat().st_mode & 0o111)
-
     def build_command_args(self, url: str) -> List[str]:
         """Build command line arguments for Firefox."""
         args: List[str] = [str(self.config.binary_path)]

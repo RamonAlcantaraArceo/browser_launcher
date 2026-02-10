@@ -22,18 +22,6 @@ class ChromeLauncher(BrowserLauncher):
         "--no-default-browser-check",
     ]
 
-    def validate_binary(self) -> bool:
-        """Check if Chrome binary exists and is executable.
-
-        Returns:
-            True if binary exists and is executable, False otherwise
-        """
-        if not self.config.binary_path:
-            return False
-
-        binary_path = str(self.config.binary_path)
-        return os.path.exists(binary_path) and os.access(binary_path, os.X_OK)
-
     def build_command_args(self, url: str) -> List[str]:
         """Build Chrome command-line arguments.
 

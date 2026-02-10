@@ -50,14 +50,9 @@ class BrowserLauncher(ABC):
         self.logger = logger
         self._driver = None
 
-    @abstractmethod
     def validate_binary(self) -> bool:
-        """Check if browser binary exists and is executable.
-
-        Returns:
-            True if binary exists and is executable, False otherwise
-        """
-        pass
+        """WebDriver-based browsers do not require binary validation."""
+        return True
 
     @abstractmethod
     def build_command_args(self, url: str) -> List[str]:
