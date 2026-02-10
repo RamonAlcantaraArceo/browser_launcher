@@ -6,6 +6,10 @@ from typing import Optional
 from browser_launcher.browsers.base import BrowserConfig
 
 class BrowserLauncherConfig:
+    def get_console_logging(self) -> bool:
+        """Return the console_logging setting from config, defaulting to False if not present."""
+        return self.config_data.get("logging", {}).get("console_logging", False)
+
     """Load and manage browser launcher configuration from TOML."""
     def __init__(self, config_path: Optional[Path] = None):
         self.config_path = config_path or (Path.home() / ".browser_launcher" / "config.toml")

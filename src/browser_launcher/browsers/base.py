@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from selenium.webdriver.remote.webdriver import WebDriver
 
 
 @dataclass
@@ -76,6 +77,11 @@ class BrowserLauncher(ABC):
             OSError: If the browser fails to launch
         """
         pass
+
+    @property
+    def driver(self) -> WebDriver:
+        """Return the current Chrome driver instance, if any."""
+        return self._driver
 
     @property
     @abstractmethod

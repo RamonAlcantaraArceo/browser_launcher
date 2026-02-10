@@ -1,6 +1,5 @@
 """CLI interface for browser_launcher using Typer."""
 
-import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -9,17 +8,10 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 
-from browser_launcher.browsers.base import BrowserConfig
-from browser_launcher.browsers.chrome import ChromeLauncher
-from browser_launcher.browsers.firefox import FirefoxLauncher
-
-from .logger import get_logger, get_command_context, setup_logging
+from .logger import get_command_context, initialize_logging, get_current_logger
 
 app = typer.Typer(help="Browser launcher CLI tool")
 console = Console()
-
-# Global logger instance
-_logger = None
 
 
 def get_home_directory() -> Path:
@@ -31,50 +23,6 @@ def get_log_directory() -> Path:
     """Get the log directory path."""
     return get_home_directory() / "logs"
 
-
-def initialize_logging(verbose: bool = False, debug: bool = False) -> None:
-    """Initialize logging based on verbosity settings.
-    
-    Args:
-        verbose: Enable verbose logging (INFO level)
-        debug: Enable debug logging (DEBUG level)
-    """
-    global _logger
-    
-    # Determine log level
-    if debug:
-        log_level = "DEBUG"
-    elif verbose:
-        log_level = "INFO"
-    else:
-        log_level = "WARNING"  # Default to minimal logging for cleaner console output
-    
-    # Determine console logging based on flags
-    console_logging = verbose or debug
-    
-    # Setup logging
-    log_dir = get_log_directory()
-    _logger = setup_logging(
-        log_dir=log_dir,
-        log_level=log_level,
-        console_logging=console_logging
-    )
-    
-    # Log initialization
-    if debug:
-        _logger.debug(f"Logging initialized at DEBUG level")
-    elif verbose:
-        _logger.info(f"Logging initialized at INFO level")
-    else:
-        _logger.info(f"Logging initialized at WARNING level (file logging only)")
-
-
-def get_current_logger():
-    """Get the current logger instance."""
-    global _logger
-    if _logger is None:
-        initialize_logging()
-    return _logger
 
 
 def create_config_template() -> str:
@@ -108,7 +56,7 @@ log_cleanup_days = 30
 
 [urls]
 # Default URLs to open
-homepage = "https://www.google.com"
+homepage = "https://www.microsoft.com"
 
 [browsers]
 # Browser-specific settings
@@ -147,6 +95,8 @@ def init(
     # Initialize logging first
     initialize_logging(verbose=verbose, debug=debug)
     logger = get_current_logger()
+    if logger is None:
+        raise RuntimeError("Logger was not initialized correctly.")
     
     # Log command execution
     context = get_command_context("init", {"force": force, "verbose": verbose, "debug": debug})
@@ -236,6 +186,8 @@ def launch(
     # Initialize logging first
     initialize_logging(verbose=verbose, debug=debug)
     logger = get_current_logger()
+    if logger is None:
+        raise RuntimeError("Logger was not initialized correctly.")
     
     # Log command execution
     context = get_command_context("launch", {
@@ -294,15 +246,15 @@ def launch(
         sys.exit(1)
     
     try:
-        typer.echo("Press Ctrl+D (or Ctrl+Z on Windows) to exit.")
+        console.print("Press Ctrl+D (or Ctrl+Z on Windows) to exit.")
         while True:
             if bl.driver.session_id is None:
-                typer.echo("session has gone bad, you need to relaunch to be able to capture screenshot")
+                console.print("session has gone bad, you need to relaunch to be able to capture screenshot")
             char = sys.stdin.read(1)
             if not char:
                 break
     except EOFError:
-        typer.echo("\nExiting...")
+        console.print("\nExiting...")
     finally:
         try:
             bl.driver.close()
@@ -338,6 +290,8 @@ def clean(
     # Initialize logging first
     initialize_logging(verbose=verbose, debug=debug)
     logger = get_current_logger()
+    if logger is None:
+        raise RuntimeError("Logger was not initialized correctly.")
     
     # Log command execution
     context = get_command_context("clean", {

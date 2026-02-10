@@ -8,6 +8,12 @@ from pathlib import Path
 from typing import Optional
 
 
+from typing import Any
+
+# Global logger instance for CLI and other modules
+_logger: Optional[logging.Logger] = None
+_instance: Any = None
+
 class BrowserLauncherLogger:
     """Custom logger for browser_launcher with file and console logging."""
     
@@ -126,14 +132,15 @@ def get_logger(
         log_dir = Path.home() / ".browser_launcher" / "logs"
     
     # Use a global instance to avoid multiple handlers
-    if not hasattr(get_logger, "_instance"):
-        get_logger._instance = BrowserLauncherLogger(
+    global _instance
+    if _instance is None:
+        _instance = BrowserLauncherLogger(
             log_dir=log_dir,
             log_level=log_level,
             console_logging=console_logging
         )
     
-    return get_logger._instance.get_logger()
+    return _instance.get_logger()
 
 
 def setup_logging(
@@ -152,13 +159,61 @@ def setup_logging(
         Configured logger instance
     """
     # Clear any existing global instance
-    if hasattr(get_logger, "_instance"):
-        delattr(get_logger, "_instance")
+    global _instance
+    _instance = None
     
     return get_logger(log_dir, log_level, console_logging)
 
 
-def get_command_context(command: str, args: dict = None) -> str:
+def initialize_logging(verbose: bool = False, debug: bool = False) -> None:
+    """Initialize logging based on verbosity settings.
+    Args:
+        verbose: Enable verbose logging (INFO level)
+        debug: Enable debug logging (DEBUG level)
+    """
+    global _logger
+    # Determine log level
+    if debug:
+        log_level = "DEBUG"
+    elif verbose:
+        log_level = "INFO"
+    else:
+        log_level = "WARNING"
+
+    # Always read console_logging from config file
+    try:
+        from browser_launcher.config import BrowserLauncherConfig
+        config_loader = BrowserLauncherConfig()
+        console_logging = config_loader.get_console_logging()
+    except Exception:
+        console_logging = False
+
+    log_dir = Path.home() / ".browser_launcher" / "logs"
+    _logger = setup_logging(
+        log_dir=log_dir,
+        log_level=log_level,
+        console_logging=console_logging
+    )
+    # NOTE:
+    # - Use `logger` (from logger module) for all debug/info/warning/error logs.
+    # - Use `typer.echo` and `console.print` for user-facing output only.
+    # - Do NOT use `logging.getLogger` or the default Python logger directly in CLI.
+    # - Logging and user output are strictly separated in all commands.
+    if debug:
+        _logger.debug(f"Logging initialized at DEBUG level")
+    elif verbose:
+        _logger.info(f"Logging initialized at INFO level")
+    else:
+        _logger.info(f"Logging initialized at WARNING level (file logging only)")
+
+def get_current_logger():
+    """Get the current logger instance."""
+    global _logger
+    if _logger is None:
+        initialize_logging()
+    return _logger
+
+def get_command_context(command: str, args: Optional[dict] = None) -> str:
     """Generate a context string for logging.
     
     Args:
