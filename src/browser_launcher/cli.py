@@ -3,6 +3,7 @@
 import sys
 from pathlib import Path
 from typing import Optional
+from importlib import resources
 
 import typer
 from rich.console import Console
@@ -24,58 +25,10 @@ def get_log_directory() -> Path:
     return get_home_directory() / "logs"
 
 
-
 def create_config_template() -> str:
-    """Create the content for the initial configuration file."""
-    return """# Browser Launcher Configuration
-# This file contains settings for the browser launcher
-
-[general]
-# Default browser to use (chrome, firefox, safari, edge)
-default_browser = "chrome"
-
-# Default timeout for browser operations (in seconds)
-timeout = 30
-
-[logging]
-# Logging configuration
-# Log level options: DEBUG, INFO, WARNING, ERROR
-default_log_level = "INFO"
-
-# Enable console logging (true/false)
-console_logging = false
-
-# Maximum log file size in bytes (10MB = 10485760)
-max_log_size = 10485760
-
-# Number of backup log files to keep
-backup_count = 5
-
-# Days to keep old log files (0 = never cleanup)
-log_cleanup_days = 30
-
-[urls]
-# Default URLs to open
-homepage = "https://www.microsoft.com"
-
-[browsers]
-# Browser-specific settings
-[chrome]
-binary_path = ""
-headless = false
-
-[firefox]
-binary_path = ""
-headless = false
-
-[safari]
-binary_path = ""
-headless = false
-
-[edge]
-binary_path = ""
-headless = false
-"""
+    """Create the content for the initial configuration file by reading from assets/default_config.toml."""
+    with resources.files("browser_launcher").joinpath("assets/default_config.toml").open("rb") as f:
+        return f.read().decode("utf-8")
 
 
 @app.command()
