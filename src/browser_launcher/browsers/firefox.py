@@ -1,11 +1,12 @@
 """Firefox browser launcher implementation."""
 
-import subprocess
+from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
+from selenium.common.exceptions import WebDriverException
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List
 
 from .base import BrowserConfig, BrowserLauncher
-
 
 class FirefoxLauncher(BrowserLauncher):
     """Firefox browser launcher implementation.
@@ -16,98 +17,51 @@ class FirefoxLauncher(BrowserLauncher):
     - Limited experimental options compared to Chrome
     """
 
-    def __init__(self, config: BrowserConfig) -> None:
-        """Initialize Firefox launcher with configuration.
-
-        Args:
-            config: BrowserConfig instance with Firefox-specific settings
-        """
-        self.config = config
-
-    @property
-    def browser_name(self) -> str:
-        """Return the browser name identifier.
-
-        Returns:
-            "firefox"
-        """
-        return "firefox"
-
-    def validate_binary(self) -> None:
-        """Validate that Firefox binary exists and is executable.
-
-        Raises:
-            FileNotFoundError: If binary path doesn't exist
-            PermissionError: If binary is not executable
-        """
+    def validate_binary(self) -> bool:
+        """Validate that Firefox binary exists and is executable."""
+        if not self.config.binary_path:
+            return False
         binary_path = Path(self.config.binary_path)
+        return binary_path.exists() and binary_path.is_file() and bool(binary_path.stat().st_mode & 0o111)
 
-        if not binary_path.exists():
-            raise FileNotFoundError(
-                f"Firefox binary not found at {self.config.binary_path}"
-            )
-
-        if not binary_path.is_file():
-            raise FileNotFoundError(
-                f"Firefox binary path is not a file: {self.config.binary_path}"
-            )
-
-        if not (binary_path.stat().st_mode & 0o111):
-            raise PermissionError(
-                f"Firefox binary is not executable: {self.config.binary_path}"
-            )
-
-    def build_command_args(self) -> List[str]:
-        """Build command line arguments for Firefox.
-
-        Firefox uses different flag syntax:
-        - -headless (instead of --headless)
-        - -profile <path> (instead of --user-data-dir)
-
-        Returns:
-            List of command arguments starting with binary path
-        """
+    def build_command_args(self, url: str) -> List[str]:
+        """Build command line arguments for Firefox."""
         args: List[str] = [str(self.config.binary_path)]
-
-        # Add headless flag if requested
         if self.config.headless:
             args.append("-headless")
-
-        # Add profile path if user_data_dir is specified
         if self.config.user_data_dir:
             args.append("-profile")
             args.append(str(self.config.user_data_dir))
-
-        # Add custom flags
         if self.config.custom_flags:
             args.extend(self.config.custom_flags)
-
-        # Add extra options if provided (dict-based options)
-        # For future extensions like preferences, app args, etc.
-        if self.config.extra_options:
-            # Extra options handling for Firefox can be extended here
-            # For now, we store them but don't actively use them in args
-            # They could be used for:
-            # - Preference settings
-            # - Environment variables
-            # - Configuration files
-            pass
-
+        # Extra options can be handled here in the future
+        args.append(url)
         return args
 
-    def launch(self) -> subprocess.Popen:  # type: ignore
-        """Launch Firefox browser process.
+    def launch(self, url: str) -> None:
+        """Launch Firefox with the given URL and set the driver instance internally."""
+        self.logger.debug(f"Launching Firefox with url: {url}")
+        try:
+            firefox_options = Options()
+            if self.config.headless:
+                firefox_options.add_argument("-headless")
+            if self.config.extra_options:
+                for key, value in self.config.extra_options.items():
+                    setattr(firefox_options, key, value)
+            driver = webdriver.Firefox(options=firefox_options)
+            self._driver = driver
+            self.safe_get_address(url)
+            self.logger.debug(f"Firefox started and navigated to {url} with driver: {driver}")
+        except WebDriverException as e:
+            self.logger.error(f"Failed to launch Firefox: {e}", exc_info=True)
+            raise
 
-        Validates the binary exists, builds command arguments, and spawns the
-        Firefox process using subprocess.Popen.
+    @property
+    def driver(self) -> webdriver.Firefox:
+        """Return the current Firefox driver instance, if any."""
+        return self._driver
 
-        Returns:
-            subprocess.Popen instance for the Firefox process
-
-        Raises:
-            FileNotFoundError: If Firefox binary doesn't exist
-            PermissionError: If Firefox binary is not executable
-        """
-        self.validate_binary()
-        args = self.build_command_args()
-        return subprocess.Popen(args)
+    @property
+    def browser_name(self) -> str:
+        """Return the browser name identifier."""
+        return "firefox"

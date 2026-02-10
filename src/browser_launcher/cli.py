@@ -9,6 +9,10 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 
+from browser_launcher.browsers.base import BrowserConfig
+from browser_launcher.browsers.chrome import ChromeLauncher
+from browser_launcher.browsers.firefox import FirefoxLauncher
+
 from .logger import get_logger, get_command_context, setup_logging
 
 app = typer.Typer(help="Browser launcher CLI tool")
@@ -247,10 +251,79 @@ def launch(
     
     # Log the action being taken
     logger.debug(f"Launch command received with URL='{url}', browser='{browser}', headless={headless}")
-    
+    can_capture_screenshot = False
+
+    bl = None
+    default_config = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+        extra_options={}
+    )
     # TODO: Implement actual browser launching logic
-    console.print("💡 This is a placeholder - actual browser launching to be implemented")
-    logger.warning("Browser launch functionality not yet implemented - placeholder message shown")
+    if browser == "chrome":
+        bl = ChromeLauncher(config=default_config, logger=logger)
+    elif browser == "firefox":
+        bl = FirefoxLauncher(config=default_config, logger=logger)
+    else:
+        console.print("💡 This is a placeholder - actual browser launching to be implemented")
+        logger.warning("Browser launch functionality not yet implemented - placeholder message shown")
+        return
+
+    bl.launch(url=url)
+
+    try:
+        typer.echo("Press Ctrl+D (or Ctrl+Z on Windows) to exit.")
+        if can_capture_screenshot:
+            typer.echo("Press 'Enter' to capture a screenshot.")
+
+        # if browser == Browser.safari:
+        #     typer.echo("You will want to select 'Stop Session' to start using that browser instance.")
+
+        while True:
+            if bl.driver.session_id is None:
+                typer.echo("session has gone bad, you need to relaunch to be able to capture screenshot")
+
+            char = sys.stdin.read(1)  # Read one character at a time
+
+            if not char:  # EOF (Ctrl+D or Ctrl+Z)
+                break
+            elif not can_capture_screenshot:
+                continue
+            # elif char.lower() == '\n':
+            #     try:
+            #         screenshot_name = gen.generate()
+            #         _capture_screenshot(
+            #             screenshot_name, driver=driver, delay=0.5,
+            #         )
+            #         typer.echo(f"Captured: {screenshot_name}")
+            #     except InvalidSessionIdException as e:
+            #         typer.echo(f"session has gone bad, you need to relaunch to be able to capture screenshot {type(e)}")
+            #     except NoSuchWindowException as e:
+            #         typer.echo(f"session has gone bad, you need to relaunch to be able to capture screenshot {type(e)}")
+            #     except Exception as e:
+            #         typer.echo(f"session has gone bad, you need to relaunch to be able to capture screenshot {type(e)} {e!r}")
+            #         raise e
+
+    except EOFError:
+        typer.echo("\nExiting...")
+
+    finally:
+        try:
+            bl.driver.close()
+        except:  # noqa: E722
+            pass
+
+def safe_get_address(address, driver):
+    try:
+        driver.get(address)
+    except Exception as e:
+        print("Caught exception!")
+        print(f"Type       : {type(e).__name__}")
+        print(f"Arguments  : {e.args}")
+        # print("Traceback  :")
+        # traceback.print_exc(file=sys.stdout)
 
 
 @app.command()
