@@ -11,6 +11,7 @@ packages = [{ include = "browser_launcher", from = "src" }]
 python = "^3.10"
 typer = "^0.20.0"
 rich = "^14.2.0"
+selenium = "^4.40.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0"
