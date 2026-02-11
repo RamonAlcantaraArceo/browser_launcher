@@ -25,33 +25,30 @@ def test_create_config_template():
 
 def test_init_creates_directory_and_files():
     """Test that init command creates directory and config file."""
+    import importlib
+    import shutil
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Mock the home directory to use our temp directory
-        with unittest.mock.patch('browser_launcher.cli.Path.home') as mock_home:
+        real_asset = Path(__file__).parent.parent / "src" / "browser_launcher" / "assets" / "default_config.toml"
+        assert real_asset.exists(), f"Asset file missing: {real_asset}"
+        asset_content = real_asset.read_text()
+        with unittest.mock.patch('browser_launcher.cli.Path.home') as mock_home, \
+             unittest.mock.patch('browser_launcher.cli.create_config_template', return_value=asset_content):
             mock_home.return_value = Path(temp_dir)
-            
+            # Ensure .browser_launcher does not exist before running CLI
+            home_dir = Path(temp_dir) / ".browser_launcher"
+            if home_dir.exists():
+                shutil.rmtree(home_dir)
+            import browser_launcher.cli
+            importlib.reload(browser_launcher.cli)
             from browser_launcher.cli import app
-            
             runner = CliRunner()
             result = runner.invoke(app, ['init', '--verbose'])
-            
-            # Check that command executed successfully
             assert result.exit_code == 0
-            
-            # Check that directory was created
-            home_dir = Path(temp_dir) / ".browser_launcher"
-            assert home_dir.exists()
-            assert home_dir.is_dir()
-            
-            # Check that config file was created
+            assert home_dir.exists() and home_dir.is_dir()
             config_file = home_dir / "config.toml"
-            assert config_file.exists()
-            assert config_file.is_file()
-            
-            # Check that logs directory was created
+            assert config_file.exists() and config_file.is_file()
             logs_dir = home_dir / "logs"
-            assert logs_dir.exists()
-            assert logs_dir.is_dir()
+            assert logs_dir.exists() and logs_dir.is_dir()
 
 
 def test_init_skips_existing_directory():
@@ -112,14 +109,12 @@ def test_clean_handles_nonexistent_directory():
     with tempfile.TemporaryDirectory() as temp_dir:
         with unittest.mock.patch('browser_launcher.cli.Path.home') as mock_home:
             mock_home.return_value = Path(temp_dir)
-            
             from browser_launcher.cli import app
             from typer.testing import CliRunner
-            
             runner = CliRunner()
             result = runner.invoke(app, ['clean', '--force'])
-            
-            # Should exit successfully but indicate nothing to clean
             assert result.exit_code == 0
-            assert "does not exist" in result.output
-            assert "Nothing to clean up" in result.output
+            output = result.output
+            # Should mention directory does not exist and nothing to clean up
+            assert "does not exist" in output
+            assert "Nothing to clean up" in output

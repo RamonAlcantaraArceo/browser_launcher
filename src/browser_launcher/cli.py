@@ -45,6 +45,10 @@ def init(
     - --debug: DEBUG level console logging including internal execution flow
     - File logging: Always active regardless of console flags
     """
+    # Get the home directory where we'll add the config and logs
+    home_dir = get_home_directory()
+    home_dir_exists = home_dir.exists()
+
     # Initialize logging first
     initialize_logging(verbose=verbose, debug=debug)
     logger = get_current_logger()
@@ -55,9 +59,8 @@ def init(
     context = get_command_context("init", {"force": force, "verbose": verbose, "debug": debug})
     logger.info(f"Starting browser launcher initialization - {context}")
     
-    home_dir = get_home_directory()
     
-    if home_dir.exists() and not force:
+    if home_dir_exists and not force:
         logger.warning(f"Browser launcher directory already exists: {home_dir}")
         console.print(f"📁 [yellow]Browser launcher directory already exists:[/yellow] {home_dir}")
         console.print("[yellow]Use --force to reinitialize[/yellow]")
@@ -214,16 +217,6 @@ def launch(
         except Exception:
             pass
 
-def safe_get_address(address, driver):
-    try:
-        driver.get(address)
-    except Exception as e:
-        print("Caught exception!")
-        print(f"Type       : {type(e).__name__}")
-        print(f"Arguments  : {e.args}")
-        # print("Traceback  :")
-        # traceback.print_exc(file=sys.stdout)
-
 
 @app.command()
 def clean(
@@ -240,26 +233,22 @@ def clean(
     - --debug: DEBUG level console logging including internal execution flow
     - File logging: Always active regardless of console flags
     """
-    # Initialize logging first
-    initialize_logging(verbose=verbose, debug=debug)
-    logger = get_current_logger()
-    if logger is None:
-        raise RuntimeError("Logger was not initialized correctly.")
-    
+    home_dir = get_home_directory()
+    home_dir_exists = home_dir.exists()
+
     # Log command execution
     context = get_command_context("clean", {
         "force": force, "verbose": verbose, "yes": yes, "debug": debug
     })
-    logger.info(f"Starting browser launcher cleanup - {context}")
-    
-    home_dir = get_home_directory()
-    
-    if not home_dir.exists():
-        logger.warning(f"Browser launcher directory does not exist: {home_dir}")
+
+    if verbose:
+        console.print(f"Starting browser launcher cleanup : {context}")
+
+    if not home_dir_exists:
         console.print(f"📁 [yellow]Browser launcher directory does not exist:[/yellow] {home_dir}")
         console.print("💡 Nothing to clean up")
         return
-    
+
     # Show what will be deleted
     if verbose:
         console.print(f"📂 Directory contents to be removed:")
@@ -269,16 +258,7 @@ def clean(
                     console.print(f"  📝 {item.relative_to(home_dir)}")
                 elif item.is_dir():
                     console.print(f"  📁 {item.relative_to(home_dir)}/")
-    
-    # Log what will be cleaned up
-    logger.debug(f"Cleanup target directory: {home_dir}")
-    if home_dir.exists():
-        for item in home_dir.rglob("*"):
-            if item.is_file():
-                logger.debug(f"Will remove file: {item.relative_to(home_dir)}")
-            elif item.is_dir():
-                logger.debug(f"Will remove directory: {item.relative_to(home_dir)}")
-    
+
     # Confirmation prompt unless force or yes flag is used
     if not (force or yes):
         confirm = typer.confirm(
@@ -286,16 +266,13 @@ def clean(
             default=False
         )
         if not confirm:
-            logger.info("Cleanup cancelled by user")
             console.print("🛑 Cleanup cancelled")
             return
     
     try:
         if verbose:
             console.print(f"🗑️ Removing directory: {home_dir}")
-        
-        logger.info(f"Removing directory: {home_dir}")
-        
+
         # Remove directory and all contents
         import shutil
         shutil.rmtree(home_dir)
@@ -311,17 +288,15 @@ def clean(
         console.print(panel)
         
         # Log successful completion
-        logger.info(f"Browser launcher cleanup completed successfully")
+        console.print(f"Browser launcher cleanup completed successfully")
         
     except PermissionError:
         error_msg = f"Permission denied: Cannot remove directory {home_dir}"
-        logger.error(error_msg)
         console.print(f"❌ [red]Error:[/red] {error_msg}")
         console.print("💡 Try running with appropriate permissions or check directory access")
         sys.exit(1)
     except Exception as e:
         error_msg = f"Failed to clean up: {e}"
-        logger.error(error_msg, exc_info=True)
         console.print(f"❌ [red]Error:[/red] {error_msg}")
         sys.exit(1)
 
