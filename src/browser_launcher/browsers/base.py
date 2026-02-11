@@ -52,18 +52,6 @@ class BrowserLauncher(ABC):
         self._driver = None
 
     @abstractmethod
-    def build_command_args(self, url: str) -> List[str]:
-        """Build command-line arguments for launching the browser.
-
-        Args:
-            url: URL to open in the browser
-
-        Returns:
-            List of command-line arguments
-        """
-        pass
-
-    @abstractmethod
     def launch(self, url: str) -> Any:
         """Launch the browser with the given URL and return the driver instance.
 

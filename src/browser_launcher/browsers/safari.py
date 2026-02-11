@@ -10,9 +10,6 @@ from .base import BrowserLauncher
 class SafariLauncher(BrowserLauncher):
     """Safari browser launcher implementation."""
 
-    def build_command_args(self, url: str):
-        return []  # Not used for WebDriver
-
     def launch(self, url: str) -> None:
         self.logger.debug(f"Launching Safari with url: {url}")
         try:

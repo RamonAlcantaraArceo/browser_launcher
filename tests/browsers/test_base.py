@@ -24,9 +24,6 @@ class TestBrowserLauncherInterface:
         """All browsers must implement launch()."""
 
         class IncompleteChrome(BrowserLauncher):
-            def build_command_args(self, url):
-                return []
-
             @property
             def browser_name(self):
                 return "chrome"
@@ -78,9 +75,6 @@ class TestBrowserLauncherInterface:
         class IncompleteChrome(BrowserLauncher):
             def launch(self, url):
                 return mock.Mock()
-
-            def build_command_args(self, url):
-                return []
 
             # Missing browser_name property
 

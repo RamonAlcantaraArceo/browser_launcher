@@ -1,7 +1,5 @@
 """Firefox browser launcher implementation."""
 
-from typing import List
-
 from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.firefox.options import Options
@@ -17,20 +15,6 @@ class FirefoxLauncher(BrowserLauncher):
     - Profile management with -profile flag instead of --user-data-dir
     - Limited experimental options compared to Chrome
     """
-
-    def build_command_args(self, url: str) -> List[str]:
-        """Build command line arguments for Firefox."""
-        args: List[str] = [str(self.config.binary_path)]
-        if self.config.headless:
-            args.append("-headless")
-        if self.config.user_data_dir:
-            args.append("-profile")
-            args.append(str(self.config.user_data_dir))
-        if self.config.custom_flags:
-            args.extend(self.config.custom_flags)
-        # Extra options can be handled here in the future
-        args.append(url)
-        return args
 
     def launch(self, url: str) -> None:
         """Launch Firefox with the given URL and set the driver instance internally."""
