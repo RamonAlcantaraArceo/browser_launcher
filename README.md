@@ -1,5 +1,24 @@
+
 # browser_launcher
 Python tool that launches a browser using selenium and manages authentication.
+
+## Linting and Static Analysis
+
+This project uses [ruff](https://github.com/astral-sh/ruff) for linting and [mypy](https://mypy.readthedocs.io/) for static type checking.
+
+To run ruff (linting):
+
+```bash
+poetry run ruff src/ tests/
+```
+
+To run mypy (type checking):
+
+```bash
+poetry run mypy src/ tests/
+```
+
+Configuration for both tools is in [pyproject.toml](pyproject.toml).
 
 ## Poetry
 

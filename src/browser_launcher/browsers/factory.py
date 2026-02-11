@@ -21,7 +21,7 @@ class BrowserFactory:
         """Create and return a browser launcher instance."""
         if browser_name not in cls._browsers:
             raise ValueError(f"Unsupported browser: {browser_name}")
-        browser_class: Type[BrowserLauncher] = cls._browsers[browser_name]
+        browser_class: Type[BrowserLauncher] = cls._browsers[browser_name] # type: ignore[type-abstract]
         return browser_class(config, logger)
 
     @classmethod

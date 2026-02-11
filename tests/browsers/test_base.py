@@ -19,7 +19,7 @@ class TestBrowserLauncherInterface:
         )
         with pytest.raises(TypeError):
             # Cannot instantiate abstract class directly; this should raise TypeError
-            BrowserLauncher(config, mock.Mock()) # pyright: ignore[reportAbstractUsage]
+            BrowserLauncher(config, mock.Mock()) # type: ignore[abstract]
 
     def test_browser_launcher_requires_launch_implementation(self):
         """All browsers must implement launch()."""
@@ -42,7 +42,7 @@ class TestBrowserLauncherInterface:
                     custom_flags=None
                 ),
                 mock.Mock()
-            ) # pyright: ignore[reportAbstractUsage]
+            ) # type: ignore[abstract]
 
     def test_browser_launcher_requires_build_command_args(self):
         """All browsers must implement build_command_args()."""
@@ -65,7 +65,7 @@ class TestBrowserLauncherInterface:
                     custom_flags=None
                 ),
                 mock.Mock()
-            ) # pyright: ignore[reportAbstractUsage]
+            ) # type: ignore[abstract]
 
     def test_browser_launcher_requires_browser_name_property(self):
         """All browsers must implement browser_name property."""
@@ -87,7 +87,7 @@ class TestBrowserLauncherInterface:
                     custom_flags=None
                 ),
                 mock.Mock()
-            ) # pyright: ignore[reportAbstractUsage]
+            ) # type: ignore[abstract]
 
 
 class TestBrowserConfig:
