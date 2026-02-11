@@ -201,9 +201,7 @@ def launch(
         console.print(f"❌ [red]Error instantiating browser:[/red] {e}")
         logger.error(f"Error instantiating browser: {e}")
         sys.exit(1)
-    
-    # Validate binary
-    
+
     # Determine URL
     launch_url = url or config_loader.get_default_url()
     console.print(f"🚀 Launching {selected_browser} at {launch_url}")
@@ -217,6 +215,7 @@ def launch(
         logger.error(f"Error launching browser: {e}")
         sys.exit(1)
     
+    # Wait for it to close
     try:
         console.print("Press Ctrl+D (or Ctrl+Z on Windows) to exit.")
         while True:
