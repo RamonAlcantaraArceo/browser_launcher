@@ -162,7 +162,8 @@ def launch(
     initialize_logging(verbose=verbose, debug=debug, console_logging=console_logging)
     logger = get_current_logger()
     if logger is None:
-        raise RuntimeError("Logger was not initialized correctly.")
+        typer.echo("Logger was not initialized correctly.")
+        raise typer.Exit(code=1)
     
     # Log command execution
     context = get_command_context("launch", {
