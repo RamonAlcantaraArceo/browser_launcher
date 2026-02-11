@@ -154,7 +154,10 @@ def setup_logging(
 
 
 def initialize_logging(
-    verbose: bool = False, debug: bool = False, console_logging: bool = False
+    verbose: bool = False,
+    debug: bool = False,
+    console_logging: bool = False,
+    log_level: Optional[str] = None,
 ) -> None:
     """Initialize logging based on verbosity settings.
     Args:
@@ -164,7 +167,9 @@ def initialize_logging(
     """
     global _logger
     # Determine log level
-    if debug:
+    if log_level:
+        pass
+    elif debug:
         log_level = "DEBUG"
     elif verbose:
         log_level = "INFO"
@@ -185,7 +190,7 @@ def initialize_logging(
     elif verbose:
         _logger.info("Logging initialized at INFO level")
     else:
-        _logger.info("Logging initialized at WARNING level (file logging only)")
+        _logger.warning(f"Logging initialized at {log_level} level")
 
 
 def get_current_logger():

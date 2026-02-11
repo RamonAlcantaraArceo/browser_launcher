@@ -52,6 +52,14 @@ def get_console_logging_setting() -> bool:
         return False
 
 
+def get_logging_level_setting() -> str:
+    try:
+        config_loader = BrowserLauncherConfig()
+        return config_loader.get_logging_level()
+    except Exception:
+        return "WARNING"
+
+
 @app.command()
 def init(
     force: bool = typer.Option(
@@ -192,9 +200,14 @@ def launch(  # noqa: C901
     """
     # Always read console_logging from config file
     console_logging = get_console_logging_setting()
-
+    logging_level = get_logging_level_setting()
     # Initialize logging first
-    initialize_logging(verbose=verbose, debug=debug, console_logging=console_logging)
+    initialize_logging(
+        verbose=verbose,
+        debug=debug,
+        console_logging=console_logging,
+        log_level=logging_level,
+    )
     logger = get_current_logger()
     if logger is None:
         typer.echo("Logger was not initialized correctly.")

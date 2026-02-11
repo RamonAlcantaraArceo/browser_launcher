@@ -14,6 +14,9 @@ class BrowserLauncherConfig:
         defaulting to False if not present."""
         return self.config_data.get("logging", {}).get("console_logging", False)
 
+    def get_logging_level(self) -> str:
+        return self.config_data.get("logging", {}).get("default_log_level", "WARNING")
+
     """Load and manage browser launcher configuration from TOML."""
 
     def __init__(self, config_path: Optional[Path] = None):
