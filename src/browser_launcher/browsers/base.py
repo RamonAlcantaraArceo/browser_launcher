@@ -1,10 +1,10 @@
 """Browser base class and configuration."""
 
-import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
 from selenium.webdriver.remote.webdriver import WebDriver
 
 

@@ -1,12 +1,15 @@
 """Safari browser launcher implementation."""
 
 from selenium import webdriver
-from selenium.webdriver.safari.options import Options
 from selenium.common.exceptions import WebDriverException
-from .base import BrowserConfig, BrowserLauncher
+from selenium.webdriver.safari.options import Options
+
+from .base import BrowserLauncher
+
 
 class SafariLauncher(BrowserLauncher):
     """Safari browser launcher implementation."""
+
     def build_command_args(self, url: str):
         return []  # Not used for WebDriver
 
@@ -15,12 +18,16 @@ class SafariLauncher(BrowserLauncher):
         try:
             safari_options = Options()
             if self.config.headless:
-                self.logger.warning("Safari does not support headless mode. Ignoring headless flag.")
+                self.logger.warning(
+                    "Safari does not support headless mode. Ignoring headless flag."
+                )
             # Safari WebDriver does not support extra_options or custom flags
             driver = webdriver.Safari(options=safari_options)
             self._driver = driver
             self.safe_get_address(url)
-            self.logger.debug(f"Safari started and navigated to {url} with driver: {driver}")
+            self.logger.debug(
+                f"Safari started and navigated to {url} with driver: {driver}"
+            )
         except WebDriverException as e:
             self.logger.error(f"Failed to launch Safari: {e}", exc_info=True)
             raise

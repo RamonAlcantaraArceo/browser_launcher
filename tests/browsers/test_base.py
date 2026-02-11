@@ -1,9 +1,11 @@
 """Tests for browser base class and BrowserConfig."""
 
-import pytest
-from pathlib import Path
 import unittest.mock as mock
-from browser_launcher.browsers.base import BrowserLauncher, BrowserConfig
+from pathlib import Path
+
+import pytest
+
+from browser_launcher.browsers.base import BrowserConfig, BrowserLauncher
 
 
 class TestBrowserLauncherInterface:
@@ -12,17 +14,15 @@ class TestBrowserLauncherInterface:
     def test_browser_launcher_is_abstract(self):
         """Base class cannot be instantiated directly."""
         config = BrowserConfig(
-            binary_path=None,
-            headless=False,
-            user_data_dir=None,
-            custom_flags=None
+            binary_path=None, headless=False, user_data_dir=None, custom_flags=None
         )
         with pytest.raises(TypeError):
             # Cannot instantiate abstract class directly; this should raise TypeError
-            BrowserLauncher(config, mock.Mock()) # type: ignore[abstract]
+            BrowserLauncher(config, mock.Mock())  # type: ignore[abstract]
 
     def test_browser_launcher_requires_launch_implementation(self):
         """All browsers must implement launch()."""
+
         class IncompleteChrome(BrowserLauncher):
             def build_command_args(self, url):
                 return []
@@ -30,6 +30,7 @@ class TestBrowserLauncherInterface:
             @property
             def browser_name(self):
                 return "chrome"
+
             # Missing launch()
 
         with pytest.raises(TypeError):
@@ -39,13 +40,14 @@ class TestBrowserLauncherInterface:
                     binary_path=None,
                     headless=False,
                     user_data_dir=None,
-                    custom_flags=None
+                    custom_flags=None,
                 ),
-                mock.Mock()
-            ) # type: ignore[abstract]
+                mock.Mock(),
+            )  # type: ignore[abstract]
 
     def test_browser_launcher_requires_build_command_args(self):
         """All browsers must implement build_command_args()."""
+
         class IncompleteChrome(BrowserLauncher):
             def launch(self, url):
                 return mock.Mock()
@@ -53,6 +55,7 @@ class TestBrowserLauncherInterface:
             @property
             def browser_name(self):
                 return "chrome"
+
             # Missing build_command_args()
 
         with pytest.raises(TypeError):
@@ -62,19 +65,21 @@ class TestBrowserLauncherInterface:
                     binary_path=None,
                     headless=False,
                     user_data_dir=None,
-                    custom_flags=None
+                    custom_flags=None,
                 ),
-                mock.Mock()
-            ) # type: ignore[abstract]
+                mock.Mock(),
+            )  # type: ignore[abstract]
 
     def test_browser_launcher_requires_browser_name_property(self):
         """All browsers must implement browser_name property."""
+
         class IncompleteChrome(BrowserLauncher):
             def launch(self, url):
                 return mock.Mock()
 
             def build_command_args(self, url):
                 return []
+
             # Missing browser_name property
 
         with pytest.raises(TypeError):
@@ -84,10 +89,10 @@ class TestBrowserLauncherInterface:
                     binary_path=None,
                     headless=False,
                     user_data_dir=None,
-                    custom_flags=None
+                    custom_flags=None,
                 ),
-                mock.Mock()
-            ) # type: ignore[abstract]
+                mock.Mock(),
+            )  # type: ignore[abstract]
 
 
 class TestBrowserConfig:
@@ -99,7 +104,7 @@ class TestBrowserConfig:
             binary_path=Path("/usr/bin/chrome"),
             headless=False,
             user_data_dir=None,
-            custom_flags=None
+            custom_flags=None,
         )
         assert config.binary_path == Path("/usr/bin/chrome")
 
@@ -109,7 +114,7 @@ class TestBrowserConfig:
             binary_path=Path("/usr/bin/chrome"),
             headless=True,
             user_data_dir=None,
-            custom_flags=None
+            custom_flags=None,
         )
         assert config.headless is True
 
@@ -119,7 +124,7 @@ class TestBrowserConfig:
             binary_path=Path("/usr/bin/chrome"),
             headless=False,
             user_data_dir=Path("/tmp/profile"),
-            custom_flags=None
+            custom_flags=None,
         )
         assert config.user_data_dir == Path("/tmp/profile")
 
@@ -130,7 +135,7 @@ class TestBrowserConfig:
             binary_path=Path("/usr/bin/chrome"),
             headless=False,
             user_data_dir=None,
-            custom_flags=flags
+            custom_flags=flags,
         )
         assert config.custom_flags == flags
 
@@ -140,7 +145,7 @@ class TestBrowserConfig:
             binary_path=Path("/usr/bin/chrome"),
             headless=False,
             user_data_dir=None,
-            custom_flags=None
+            custom_flags=None,
         )
         assert config.user_data_dir is None
         assert config.custom_flags is None
@@ -151,6 +156,6 @@ class TestBrowserConfig:
             binary_path=Path("/usr/bin/chrome"),
             headless=False,
             user_data_dir=None,
-            custom_flags=None
+            custom_flags=None,
         )
         assert config.headless is False

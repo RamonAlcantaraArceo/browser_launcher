@@ -1,12 +1,13 @@
 """Firefox browser launcher implementation."""
 
-from selenium import webdriver
-from selenium.webdriver.firefox.options import Options
-from selenium.common.exceptions import WebDriverException
-from pathlib import Path
 from typing import List
 
-from .base import BrowserConfig, BrowserLauncher
+from selenium import webdriver
+from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.firefox.options import Options
+
+from .base import BrowserLauncher
+
 
 class FirefoxLauncher(BrowserLauncher):
     """Firefox browser launcher implementation.
@@ -44,7 +45,9 @@ class FirefoxLauncher(BrowserLauncher):
             driver = webdriver.Firefox(options=firefox_options)
             self._driver = driver
             self.safe_get_address(url)
-            self.logger.debug(f"Firefox started and navigated to {url} with driver: {driver}")
+            self.logger.debug(
+                f"Firefox started and navigated to {url} with driver: {driver}"
+            )
         except WebDriverException as e:
             self.logger.error(f"Failed to launch Firefox: {e}", exc_info=True)
             raise

@@ -1,14 +1,13 @@
 """Unit tests for Firefox browser launcher implementation."""
 
 # import subprocess  # No longer needed with WebDriver-based launcher
-import tempfile
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
-from browser_launcher.browsers.firefox import FirefoxLauncher
 from browser_launcher.browsers.base import BrowserConfig
+from browser_launcher.browsers.firefox import FirefoxLauncher
 
 
 class TestFirefoxLauncher:

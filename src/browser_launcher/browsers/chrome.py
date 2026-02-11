@@ -1,14 +1,11 @@
 """Chrome browser implementation."""
 
-import os
-import subprocess
 from typing import List
 
 from selenium import webdriver
-from selenium.common.exceptions import InvalidSessionIdException, NoSuchWindowException
 from selenium.webdriver.chrome.options import Options
 
-from browser_launcher.browsers.base import BrowserLauncher, BrowserConfig
+from browser_launcher.browsers.base import BrowserLauncher
 
 
 class ChromeLauncher(BrowserLauncher):
@@ -77,7 +74,9 @@ class ChromeLauncher(BrowserLauncher):
 
             self.safe_get_address(url=url)
 
-            self.logger.debug(f"Chrome started and navigated to {url} with driver: {driver}")
+            self.logger.debug(
+                f"Chrome started and navigated to {url} with driver: {driver}"
+            )
 
         except Exception as e:
             self.logger.error(f"Failed to launch Chrome: {e}", exc_info=True)

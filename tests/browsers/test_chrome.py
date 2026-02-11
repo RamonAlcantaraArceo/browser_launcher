@@ -1,11 +1,10 @@
 """Tests for Chrome browser implementation."""
 
-import os
-from pathlib import Path
-import pytest
 import unittest.mock as mock
-from browser_launcher.browsers.chrome import ChromeLauncher
+from pathlib import Path
+
 from browser_launcher.browsers.base import BrowserConfig
+from browser_launcher.browsers.chrome import ChromeLauncher
 
 
 class TestChromeBuildCommandArgs:
@@ -17,7 +16,7 @@ class TestChromeBuildCommandArgs:
             binary_path=Path("/usr/bin/google-chrome"),
             headless=False,
             user_data_dir=None,
-            custom_flags=None
+            custom_flags=None,
         )
         browser = ChromeLauncher(config, mock.Mock())
         args = browser.build_command_args("https://example.com")
@@ -29,7 +28,7 @@ class TestChromeBuildCommandArgs:
             binary_path=Path("/usr/bin/google-chrome"),
             headless=False,
             user_data_dir=None,
-            custom_flags=None
+            custom_flags=None,
         )
         browser = ChromeLauncher(config, mock.Mock())
         args = browser.build_command_args("https://example.com")
@@ -41,7 +40,7 @@ class TestChromeBuildCommandArgs:
             binary_path=Path("/usr/bin/google-chrome"),
             headless=True,
             user_data_dir=None,
-            custom_flags=None
+            custom_flags=None,
         )
         browser = ChromeLauncher(config, mock.Mock())
         args = browser.build_command_args("https://example.com")
@@ -53,7 +52,7 @@ class TestChromeBuildCommandArgs:
             binary_path=Path("/usr/bin/google-chrome"),
             headless=False,
             user_data_dir=None,
-            custom_flags=None
+            custom_flags=None,
         )
         browser = ChromeLauncher(config, mock.Mock())
         args = browser.build_command_args("https://example.com")
@@ -65,7 +64,7 @@ class TestChromeBuildCommandArgs:
             binary_path=Path("/usr/bin/google-chrome"),
             headless=False,
             user_data_dir=Path("/tmp/profile"),
-            custom_flags=None
+            custom_flags=None,
         )
         browser = ChromeLauncher(config, mock.Mock())
         args = browser.build_command_args("https://example.com")
@@ -77,7 +76,7 @@ class TestChromeBuildCommandArgs:
             binary_path=Path("/usr/bin/google-chrome"),
             headless=False,
             user_data_dir=None,
-            custom_flags=["--disable-sync", "--no-first-run"]
+            custom_flags=["--disable-sync", "--no-first-run"],
         )
         browser = ChromeLauncher(config, mock.Mock())
         args = browser.build_command_args("https://example.com")
@@ -90,11 +89,11 @@ class TestChromeBuildCommandArgs:
             binary_path=Path("/usr/bin/google-chrome"),
             headless=False,
             user_data_dir=None,
-            custom_flags=None
+            custom_flags=None,
         )
         browser = ChromeLauncher(config, mock.Mock())
         args = browser.build_command_args("https://example.com")
-        
+
         # Should have some disable flags for automation
         assert any("disable" in arg.lower() for arg in args)
 
@@ -108,7 +107,7 @@ class TestChromeBrowserName:
             binary_path=Path("/usr/bin/google-chrome"),
             headless=False,
             user_data_dir=None,
-            custom_flags=None
+            custom_flags=None,
         )
         browser = ChromeLauncher(config, mock.Mock())
         assert browser.browser_name == "chrome"

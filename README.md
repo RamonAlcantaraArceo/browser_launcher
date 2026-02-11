@@ -9,7 +9,12 @@ This project uses [ruff](https://github.com/astral-sh/ruff) for linting and [myp
 To run ruff (linting):
 
 ```bash
-poetry run ruff src/ tests/
+poetry run ruff check src/ tests/
+```
+
+To run ruff (format):
+```bash
+poetry run ruff format
 ```
 
 To run mypy (type checking):

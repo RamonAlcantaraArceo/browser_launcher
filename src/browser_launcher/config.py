@@ -1,9 +1,12 @@
 """Configuration management for browser launcher."""
 
-import toml
 from pathlib import Path
 from typing import Optional
+
+import toml
+
 from browser_launcher.browsers.base import BrowserConfig
+
 
 class BrowserLauncherConfig:
     def get_console_logging(self) -> bool:
@@ -11,8 +14,11 @@ class BrowserLauncherConfig:
         return self.config_data.get("logging", {}).get("console_logging", False)
 
     """Load and manage browser launcher configuration from TOML."""
+
     def __init__(self, config_path: Optional[Path] = None):
-        self.config_path = config_path or (Path.home() / ".browser_launcher" / "config.toml")
+        self.config_path = config_path or (
+            Path.home() / ".browser_launcher" / "config.toml"
+        )
         self.config_data = self._load_config()
 
     def _load_config(self):
@@ -20,7 +26,9 @@ class BrowserLauncherConfig:
             raise FileNotFoundError(f"Config file not found: {self.config_path}")
         return toml.load(self.config_path)
 
-    def get_browser_config(self, browser_name: str, headless: bool = False) -> BrowserConfig:
+    def get_browser_config(
+        self, browser_name: str, headless: bool = False
+    ) -> BrowserConfig:
         browsers = self.config_data.get("browsers", {})
         browser_section = browsers.get(browser_name, {})
         binary_path = browser_section.get("binary_path")
@@ -39,4 +47,6 @@ class BrowserLauncherConfig:
         return self.config_data.get("general", {}).get("default_browser", "chrome")
 
     def get_default_url(self) -> str:
-        return self.config_data.get("urls", {}).get("homepage", "https://www.microsoft.com")
+        return self.config_data.get("urls", {}).get(
+            "homepage", "https://www.microsoft.com"
+        )

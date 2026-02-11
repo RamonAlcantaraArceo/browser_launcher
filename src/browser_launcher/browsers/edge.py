@@ -1,12 +1,15 @@
 """Edge browser launcher implementation."""
 
 from selenium import webdriver
-from selenium.webdriver.edge.options import Options
 from selenium.common.exceptions import WebDriverException
-from .base import BrowserConfig, BrowserLauncher
+from selenium.webdriver.edge.options import Options
+
+from .base import BrowserLauncher
+
 
 class EdgeLauncher(BrowserLauncher):
     """Edge browser launcher implementation."""
+
     def build_command_args(self, url: str):
         return []  # Not used for WebDriver
 
@@ -22,7 +25,9 @@ class EdgeLauncher(BrowserLauncher):
             driver = webdriver.Edge(options=edge_options)
             self._driver = driver
             self.safe_get_address(url)
-            self.logger.debug(f"Edge started and navigated to {url} with driver: {driver}")
+            self.logger.debug(
+                f"Edge started and navigated to {url} with driver: {driver}"
+            )
         except WebDriverException as e:
             self.logger.error(f"Failed to launch Edge: {e}", exc_info=True)
             raise

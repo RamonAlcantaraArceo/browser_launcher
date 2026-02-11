@@ -1,9 +1,10 @@
 """Unit tests for BrowserLauncherConfig (config.py)."""
 
-import tempfile
 from pathlib import Path
-import toml
+
 import pytest
+import toml
+
 from browser_launcher.config import BrowserLauncherConfig
 
 # Minimal valid config for tests
@@ -17,10 +18,11 @@ default_config = {
             "headless": False,
             "user_data_dir": "/tmp/profile",
             "custom_flags": ["--flag1"],
-            "extra_options": {"foo": "bar"}
+            "extra_options": {"foo": "bar"},
         }
-    }
+    },
 }
+
 
 def write_config(tmp_path, config_dict):
     config_path = tmp_path / "config.toml"

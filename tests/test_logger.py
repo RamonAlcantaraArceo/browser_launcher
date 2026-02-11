@@ -1,14 +1,17 @@
 """Unit tests for logger.py (BrowserLauncherLogger and helpers)."""
 
 import logging
-import tempfile
-from pathlib import Path
-import shutil
 import os
-import pytest
+from pathlib import Path
+
 from browser_launcher.logger import (
-    BrowserLauncherLogger, get_logger, setup_logging, get_current_logger, get_command_context
+    BrowserLauncherLogger,
+    get_command_context,
+    get_current_logger,
+    get_logger,
+    setup_logging,
 )
+
 
 def test_logger_creates_log_file_and_console(tmp_path):
     log_dir = tmp_path / "logs"
@@ -32,6 +35,7 @@ def test_initialize_logging_debug(tmp_path, monkeypatch):
     # Patch Path.home to tmp_path for isolation
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     from browser_launcher import logger as logger_mod
+
     logger_mod._logger = None
     # Call initialize_logging with debug=True to cover log_level = 'DEBUG'
     logger_mod.initialize_logging(debug=True, console_logging=True)
@@ -42,9 +46,12 @@ def test_initialize_logging_debug(tmp_path, monkeypatch):
         content = f.read()
         assert "Logging initialized at DEBUG level" in content
 
+
 def test_logger_respects_log_level(tmp_path):
     log_dir = tmp_path / "logs"
-    logger_obj = BrowserLauncherLogger(log_dir, log_level="WARNING", console_logging=False)
+    logger_obj = BrowserLauncherLogger(
+        log_dir, log_level="WARNING", console_logging=False
+    )
     logger = logger_obj.get_logger()
     logger.debug("should not appear")
     logger.info("should not appear")
@@ -59,7 +66,9 @@ def test_logger_respects_log_level(tmp_path):
 
 def test_set_level_changes_log_level(tmp_path):
     log_dir = tmp_path / "logs"
-    logger_obj = BrowserLauncherLogger(log_dir, log_level="ERROR", console_logging=False)
+    logger_obj = BrowserLauncherLogger(
+        log_dir, log_level="ERROR", console_logging=False
+    )
     logger = logger_obj.get_logger()
     logger_obj.set_level("DEBUG")
     logger.debug("debug now visible")
@@ -76,7 +85,7 @@ def test_cleanup_old_logs(tmp_path):
     old_log = log_dir / "old.log"
     old_log.write_text("old log")
     # Set mtime to 40 days ago
-    old_time = (os.path.getmtime(old_log) - (40 * 24 * 60 * 60))
+    old_time = os.path.getmtime(old_log) - (40 * 24 * 60 * 60)
     os.utime(old_log, (old_time, old_time))
     logger_obj.cleanup_old_logs(days=30)
     assert not old_log.exists()
@@ -93,7 +102,9 @@ def test_get_logger_and_setup_logging(tmp_path):
 
 
 def test_get_command_context():
-    ctx = get_command_context("launch", {"browser": "chrome", "headless": True, "foo": None})
+    ctx = get_command_context(
+        "launch", {"browser": "chrome", "headless": True, "foo": None}
+    )
     assert ctx == "[launch] browser=chrome | headless=True"
     ctx2 = get_command_context("init")
     assert ctx2 == "[init]"
@@ -104,6 +115,7 @@ def test_get_current_logger_returns_logger(monkeypatch, tmp_path):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     # Remove global _logger if set
     from browser_launcher import logger as logger_mod
+
     logger_mod._logger = None
     log = get_current_logger()
     assert isinstance(log, logging.Logger)
