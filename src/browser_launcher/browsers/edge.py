@@ -14,11 +14,6 @@ class EdgeLauncher(BrowserLauncher):
         self.logger.debug(f"Launching Edge with url: {url}")
         try:
             edge_options = Options()
-            if self.config.headless:
-                edge_options.add_argument("--headless")
-            if self.config.extra_options:
-                for key, value in self.config.extra_options.items():
-                    edge_options.add_experimental_option(key, value)
             driver = webdriver.Edge(options=edge_options)
             self._driver = driver
             self.safe_get_address(url)

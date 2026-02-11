@@ -1,6 +1,7 @@
 """Chrome browser implementation."""
 
 from selenium import webdriver
+from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.chrome.options import Options
 
 from browser_launcher.browsers.base import BrowserLauncher
@@ -8,14 +9,6 @@ from browser_launcher.browsers.base import BrowserLauncher
 
 class ChromeLauncher(BrowserLauncher):
     """Chrome browser launcher implementation."""
-
-    # Default flags for Chrome automation
-    _DEFAULT_FLAGS = [
-        "--disable-sync",
-        "--disable-default-apps",
-        "--no-first-run",
-        "--no-default-browser-check",
-    ]
 
     def launch(self, url: str) -> None:
         """Launch Chrome with the given URL and set the driver instance internally.
@@ -44,7 +37,7 @@ class ChromeLauncher(BrowserLauncher):
                 f"Chrome started and navigated to {url} with driver: {driver}"
             )
 
-        except Exception as e:
+        except WebDriverException as e:
             self.logger.error(f"Failed to launch Chrome: {e}", exc_info=True)
             raise
 

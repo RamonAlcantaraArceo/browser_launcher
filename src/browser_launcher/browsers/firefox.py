@@ -21,11 +21,6 @@ class FirefoxLauncher(BrowserLauncher):
         self.logger.debug(f"Launching Firefox with url: {url}")
         try:
             firefox_options = Options()
-            if self.config.headless:
-                firefox_options.add_argument("-headless")
-            if self.config.extra_options:
-                for key, value in self.config.extra_options.items():
-                    setattr(firefox_options, key, value)
             driver = webdriver.Firefox(options=firefox_options)
             self._driver = driver
             self.safe_get_address(url)

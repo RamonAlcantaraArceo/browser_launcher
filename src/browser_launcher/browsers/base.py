@@ -64,12 +64,13 @@ class BrowserLauncher(ABC):
         Raises:
             OSError: If the browser fails to launch
         """
-        pass
+        raise NotImplementedError  # pragma: no cover
 
     @property
+    @abstractmethod
     def driver(self) -> WebDriver:
-        """Return the current Chrome driver instance, if any."""
-        return self._driver
+        """Subclasses must provide a driver property."""
+        raise NotImplementedError  # pragma: no cover
 
     @property
     @abstractmethod
@@ -79,4 +80,4 @@ class BrowserLauncher(ABC):
         Returns:
             Browser name (e.g., 'chrome', 'firefox', 'safari', 'edge')
         """
-        pass
+        raise NotImplementedError  # pragma: no cover

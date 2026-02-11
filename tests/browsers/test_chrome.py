@@ -3,111 +3,78 @@
 import unittest.mock as mock
 from pathlib import Path
 
-from browser_launcher.browsers.base import BrowserConfig
+import pytest
+
+from browser_launcher.browsers.base import BrowserConfig, BrowserLauncher
 from browser_launcher.browsers.chrome import ChromeLauncher
 
 
-class TestChromeBuildCommandArgs:
-    """Test Chrome argument building logic."""
-
-    def test_chrome_command_includes_binary_path(self):
-        """Test that binary path is first argument."""
-        config = BrowserConfig(
-            binary_path=Path("/usr/bin/google-chrome"),
-            headless=False,
-            user_data_dir=None,
-            custom_flags=None,
-        )
-        browser = ChromeLauncher(config, mock.Mock())
-        args = browser.build_command_args("https://example.com")
-        assert args[0] == "/usr/bin/google-chrome"
-
-    def test_chrome_command_includes_url_as_last_arg(self):
-        """Test that URL is last argument."""
-        config = BrowserConfig(
-            binary_path=Path("/usr/bin/google-chrome"),
-            headless=False,
-            user_data_dir=None,
-            custom_flags=None,
-        )
-        browser = ChromeLauncher(config, mock.Mock())
-        args = browser.build_command_args("https://example.com")
-        assert args[-1] == "https://example.com"
-
-    def test_chrome_headless_adds_flag(self):
-        """Test that --headless flag is added when headless=True."""
-        config = BrowserConfig(
-            binary_path=Path("/usr/bin/google-chrome"),
-            headless=True,
-            user_data_dir=None,
-            custom_flags=None,
-        )
-        browser = ChromeLauncher(config, mock.Mock())
-        args = browser.build_command_args("https://example.com")
-        assert "--headless" in args
-
-    def test_chrome_no_headless_excludes_flag(self):
-        """Test that --headless flag is not added when headless=False."""
-        config = BrowserConfig(
-            binary_path=Path("/usr/bin/google-chrome"),
-            headless=False,
-            user_data_dir=None,
-            custom_flags=None,
-        )
-        browser = ChromeLauncher(config, mock.Mock())
-        args = browser.build_command_args("https://example.com")
-        assert "--headless" not in args
-
-    def test_chrome_adds_user_data_dir(self):
-        """Test that user data directory flag is added."""
-        config = BrowserConfig(
-            binary_path=Path("/usr/bin/google-chrome"),
-            headless=False,
-            user_data_dir=Path("/tmp/profile"),
-            custom_flags=None,
-        )
-        browser = ChromeLauncher(config, mock.Mock())
-        args = browser.build_command_args("https://example.com")
-        assert "--user-data-dir=/tmp/profile" in args
-
-    def test_chrome_adds_custom_flags(self):
-        """Test that custom flags are included."""
-        config = BrowserConfig(
-            binary_path=Path("/usr/bin/google-chrome"),
-            headless=False,
-            user_data_dir=None,
-            custom_flags=["--disable-sync", "--no-first-run"],
-        )
-        browser = ChromeLauncher(config, mock.Mock())
-        args = browser.build_command_args("https://example.com")
-        assert "--disable-sync" in args
-        assert "--no-first-run" in args
-
-    def test_chrome_includes_default_flags(self):
-        """Test that Chrome includes sensible default flags."""
-        config = BrowserConfig(
-            binary_path=Path("/usr/bin/google-chrome"),
-            headless=False,
-            user_data_dir=None,
-            custom_flags=None,
-        )
-        browser = ChromeLauncher(config, mock.Mock())
-        args = browser.build_command_args("https://example.com")
-
-        # Should have some disable flags for automation
-        assert any("disable" in arg.lower() for arg in args)
-
-
 class TestChromeBrowserName:
-    """Test Chrome browser identification."""
+    """Test suite for ChromeLauncher implementation."""
 
-    def test_chrome_browser_name_property(self):
-        """Test that browser_name returns 'chrome'."""
-        config = BrowserConfig(
-            binary_path=Path("/usr/bin/google-chrome"),
+    @pytest.fixture
+    def chrome_config(self):
+        """Create a basic Chrome configuration for testing."""
+        return BrowserConfig(
+            binary_path=Path("/usr/bin/chrome"),
             headless=False,
             user_data_dir=None,
-            custom_flags=None,
+            custom_flags=[],
         )
-        browser = ChromeLauncher(config, mock.Mock())
-        assert browser.browser_name == "chrome"
+
+    @pytest.fixture
+    def chrome_instance(self, chrome_config: BrowserConfig):
+        launcher = ChromeLauncher(chrome_config, mock.Mock())
+        yield launcher
+
+        if launcher.driver:
+            try:
+                launcher.driver.close()
+            except:  # noqa: E722
+                pass
+
+    def test_chrome_launcher_is_instantiable(self, chrome_instance: BrowserLauncher):
+        """Test that ChromeLauncher can be instantiated with valid config."""
+
+        assert chrome_instance is not None
+        assert isinstance(chrome_instance, ChromeLauncher)
+
+    def test_browser_name_property_returns_chrome(
+        self, chrome_instance: BrowserLauncher
+    ):
+        """Test that browser_name property returns 'chrome'."""
+
+        assert chrome_instance.browser_name == "chrome"
+
+    def test_has_driver_property(self, chrome_instance: BrowserLauncher):
+        chrome_instance.launch("about:blank")
+
+    def test_has_driver_removed_halfway(self, chrome_instance: BrowserLauncher):
+        chrome_instance.launch("about:blank")
+        assert chrome_instance.driver
+        chrome_instance.driver.close()
+        chrome_instance._driver = None
+
+        chrome_instance.safe_get_address("about:blank")
+        pass
+
+    def test_failed_to_launch(self, chrome_instance: BrowserLauncher):
+        """Test that mocks the webdriver.Chrome constructor and raises a
+        WebDriverException simulating a missing driver scenario."""
+        import selenium.webdriver
+        from selenium.common.exceptions import WebDriverException
+
+        # Patch Chrome WebDriver to raise exception
+        with (
+            mock.patch.object(
+                selenium.webdriver,
+                "Chrome",
+                side_effect=WebDriverException("Driver not found"),
+            ),
+            pytest.raises(WebDriverException),
+        ):
+            chrome_instance._driver = None
+            # Should log error and not raise
+            chrome_instance.launch("about:blank")
+            # After failed launch, driver should still be None
+            assert chrome_instance.driver is None

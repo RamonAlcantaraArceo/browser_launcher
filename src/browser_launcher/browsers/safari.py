@@ -14,11 +14,6 @@ class SafariLauncher(BrowserLauncher):
         self.logger.debug(f"Launching Safari with url: {url}")
         try:
             safari_options = Options()
-            if self.config.headless:
-                self.logger.warning(
-                    "Safari does not support headless mode. Ignoring headless flag."
-                )
-            # Safari WebDriver does not support extra_options or custom flags
             driver = webdriver.Safari(options=safari_options)
             self._driver = driver
             self.safe_get_address(url)

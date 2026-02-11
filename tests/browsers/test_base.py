@@ -43,32 +43,6 @@ class TestBrowserLauncherInterface:
                 mock.Mock(),
             )  # type: ignore[abstract]
 
-    def test_browser_launcher_requires_build_command_args(self):
-        """All browsers must implement build_command_args()."""
-
-        class IncompleteChrome(BrowserLauncher):
-            def launch(self, url):
-                return mock.Mock()
-
-            @property
-            def browser_name(self):
-                return "chrome"
-
-            # Missing build_command_args()
-
-        with pytest.raises(TypeError):
-            # Cannot instantiate abstract class with missing build_command_args();
-            # should raise TypeError
-            IncompleteChrome(
-                BrowserConfig(
-                    binary_path=None,
-                    headless=False,
-                    user_data_dir=None,
-                    custom_flags=None,
-                ),
-                mock.Mock(),
-            )  # type: ignore[abstract]
-
     def test_browser_launcher_requires_browser_name_property(self):
         """All browsers must implement browser_name property."""
 

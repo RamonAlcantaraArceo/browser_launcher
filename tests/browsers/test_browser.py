@@ -14,7 +14,7 @@ from browser_launcher.browsers.safari import SafariLauncher
 
 
 @pytest.mark.parametrize(
-    "Launcher, browser_name, config, expected_args, headless_flag",
+    "Launcher, browser_name, config, headless_flag",
     [
         # Chrome
         (
@@ -27,13 +27,6 @@ from browser_launcher.browsers.safari import SafariLauncher
                 custom_flags=["--test-flag"],
                 extra_options={},
             ),
-            [
-                "/usr/bin/google-chrome",
-                "--headless",
-                "--user-data-dir=/tmp/profile",
-                "--test-flag",
-                "https://example.com",
-            ],
             "--headless",
         ),
         # Firefox
@@ -47,14 +40,6 @@ from browser_launcher.browsers.safari import SafariLauncher
                 custom_flags=["--test-flag"],
                 extra_options={},
             ),
-            [
-                "/usr/bin/firefox",
-                "-headless",
-                "-profile",
-                "/tmp/profile",
-                "--test-flag",
-                "https://example.com",
-            ],
             "-headless",
         ),
         # Safari (WebDriver, args always empty)
@@ -68,7 +53,6 @@ from browser_launcher.browsers.safari import SafariLauncher
                 custom_flags=None,
                 extra_options={},
             ),
-            [],
             None,
         ),
         # Edge (WebDriver, args always empty)
@@ -82,25 +66,11 @@ from browser_launcher.browsers.safari import SafariLauncher
                 custom_flags=None,
                 extra_options={},
             ),
-            [],
             None,
         ),
     ],
 )
-def test_launcher_instantiation_and_args(
-    Launcher, browser_name, config, expected_args, headless_flag
-):
+def test_launcher_instantiation_and_args(Launcher, browser_name, config, headless_flag):
     launcher = Launcher(config, mock.Mock())
     assert launcher is not None
     assert launcher.browser_name == browser_name
-    args = launcher.build_command_args("https://example.com")
-    assert isinstance(args, list)
-    if expected_args:
-        # For Chrome/Firefox, check that all expected args are present
-        for expected in expected_args:
-            assert expected in args
-        if headless_flag:
-            assert headless_flag in args
-    else:
-        # For Safari/Edge, should be empty
-        assert args == []

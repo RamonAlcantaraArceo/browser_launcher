@@ -60,7 +60,7 @@ src/browser_launcher/
 #### 1. **Abstract Base Class (ABC)**
 - `browsers/base.py` defines the contract all browsers must follow
 - Ensures consistent interface across all implementations
-- Enforces required methods: `launch()`, `validate_binary()`, `build_command_args()`
+- Enforces required methods: `launch()`, `validate_binary()`
 
 #### 2. **Factory Pattern**
 - `browsers/factory.py` handles browser instantiation
@@ -110,10 +110,7 @@ class BrowserLauncher(ABC):
         """Check if browser binary exists and is executable."""
         pass
     
-    @abstractmethod
-    def build_command_args(self, url: str) -> List[str]:
-        """Build command-line arguments for launching the browser."""
-        pass
+    # build_command_args method removed
     
     @abstractmethod
     def launch(self, url: str) -> subprocess.Popen:
