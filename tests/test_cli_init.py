@@ -13,6 +13,16 @@ def test_get_home_directory():
     assert home_dir == expected
 
 
+def test_get_console_logging_setting_true_false(monkeypatch):
+    # Patch config reading to return True and False for console_logging
+    from browser_launcher import cli
+    from browser_launcher.config import BrowserLauncherConfig
+
+    assert cli.get_console_logging_setting() is False
+    monkeypatch.setattr(BrowserLauncherConfig, "get_console_logging", lambda self: True)
+    assert cli.get_console_logging_setting() is True
+
+
 def test_create_config_template():
     """Test that config template is created correctly."""
     config_content = create_config_template()
@@ -71,6 +81,48 @@ def test_init_skips_existing_directory():
             assert result2.exit_code == 0
             assert "already exists" in result2.output
 
+def test_init_permission_error(monkeypatch):
+    import tempfile
+    import unittest.mock
+    from browser_launcher.cli import app
+    from typer.testing import CliRunner
+    with tempfile.TemporaryDirectory() as temp_dir:
+        home_dir = Path(temp_dir) / ".browser_launcher"
+        monkeypatch.setattr('browser_launcher.cli.Path.home', lambda: Path(temp_dir))
+        # Patch Path.mkdir to raise only for home_dir
+        real_mkdir = Path.mkdir
+        def permission_side_effect(self, *args, **kwargs):
+            if self == home_dir:
+                raise PermissionError("Mock permission error")
+            return real_mkdir(self, *args, **kwargs)
+        with unittest.mock.patch("pathlib.Path.mkdir", new=permission_side_effect):
+            runner = CliRunner()
+            result = runner.invoke(app, ['init', '--force'])
+            assert result.exit_code != 0
+            assert "Permission denied" in result.output
+            assert "Error:" in result.output
+
+def test_init_general_exception(monkeypatch):
+    import tempfile
+    import unittest.mock
+    from browser_launcher.cli import app
+    from typer.testing import CliRunner
+    with tempfile.TemporaryDirectory() as temp_dir:
+        home_dir = Path(temp_dir) / ".browser_launcher"
+        monkeypatch.setattr('browser_launcher.cli.Path.home', lambda: Path(temp_dir))
+        # Patch Path.mkdir to raise only for home_dir
+        real_mkdir = Path.mkdir
+        def general_side_effect(self, *args, **kwargs):
+            if self == home_dir:
+                raise Exception("Mock general error")
+            return real_mkdir(self, *args, **kwargs)
+        with unittest.mock.patch("pathlib.Path.mkdir", new=general_side_effect):
+            runner = CliRunner()
+            result = runner.invoke(app, ['init', '--force'])
+            assert result.exit_code != 0
+            assert "Failed to initialize" in result.output
+            assert "Error:" in result.output
+
 
 def test_version():
     """Test that version is correctly defined."""
@@ -118,3 +170,17 @@ def test_clean_handles_nonexistent_directory():
             # Should mention directory does not exist and nothing to clean up
             assert "does not exist" in output
             assert "Nothing to clean up" in output
+
+def test_init_runtime_error_logger(monkeypatch):
+    import tempfile
+    import unittest.mock
+    from browser_launcher.cli import app
+    from typer.testing import CliRunner
+    with tempfile.TemporaryDirectory() as temp_dir:
+        monkeypatch.setattr('browser_launcher.cli.Path.home', lambda: Path(temp_dir))
+        # Patch get_current_logger to return None to trigger RuntimeError
+        with unittest.mock.patch('browser_launcher.cli.get_current_logger', return_value=None):
+            runner = CliRunner()
+            result = runner.invoke(app, ['init', '--force'])
+            assert result.exit_code == 1
+            assert "Logger was not initialized correctly." in result.output

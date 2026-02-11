@@ -20,6 +20,22 @@ def test_clean_verbose_output(tmp_path, monkeypatch):
     assert "Removing directory" in result.output
     assert "Cleanup Complete" in result.output
 
+
+def test_clean_verbose_with_extra_folder(tmp_path, monkeypatch):
+    home_dir = setup_temp_home(tmp_path)
+    extra_folder = home_dir / "extra_folder"
+    extra_folder.mkdir()
+    (extra_folder / "extra_file.txt").write_text("extra")
+    monkeypatch.setattr("browser_launcher.cli.get_home_directory", lambda: home_dir)
+    runner = CliRunner()
+    result = runner.invoke(app, ["clean", "--yes", "--verbose"])
+    assert "Starting browser launcher cleanup" in result.output
+    assert "dummy.txt" in result.output
+    assert "extra_folder" in result.output
+    assert "extra_file.txt" in result.output
+    assert "Removing directory" in result.output
+    assert "Cleanup Complete" in result.output
+
 def test_clean_force_skips_confirmation(tmp_path, monkeypatch):
     home_dir = setup_temp_home(tmp_path)
     monkeypatch.setattr("browser_launcher.cli.get_home_directory", lambda: home_dir)

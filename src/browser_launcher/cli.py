@@ -60,27 +60,27 @@ def init(
     home_dir = get_home_directory()
     home_dir_exists = home_dir.exists()
 
-    # Always read console_logging from config file
-    console_logging = get_console_logging_setting()
-
-    # Initialize logging first
-    initialize_logging(verbose=verbose, debug=debug, console_logging=console_logging)
-    logger = get_current_logger()
-    if logger is None:
-        raise RuntimeError("Logger was not initialized correctly.")
-    
     # Log command execution
     context = get_command_context("init", {"force": force, "verbose": verbose, "debug": debug})
-    logger.info(f"Starting browser launcher initialization - {context}")
-    
-    
+    console.print(f"Starting browser launcher initialization - {context}")
+
     if home_dir_exists and not force:
-        logger.warning(f"Browser launcher directory already exists: {home_dir}")
         console.print(f"📁 [yellow]Browser launcher directory already exists:[/yellow] {home_dir}")
         console.print("[yellow]Use --force to reinitialize[/yellow]")
         return
-    
+
+    import logging
+    logger : Optional[logging.Logger] = None
     try:
+        # Always read console_logging from config file
+        console_logging = get_console_logging_setting()
+
+        # Initialize logging first
+        initialize_logging(verbose=verbose, debug=debug, console_logging=console_logging)
+        logger = get_current_logger()
+        if logger is None:
+            raise RuntimeError("Logger was not initialized correctly.")
+
         # Log directory creation
         logger.debug(f"Creating home directory: {home_dir}")
         
@@ -126,13 +126,15 @@ def init(
         
     except PermissionError:
         error_msg = f"Permission denied: Cannot create directory {home_dir}"
-        logger.error(error_msg)
+        if logger:
+            logger.error(error_msg) # pragma: no cover
         console.print(f"❌ [red]Error:[/red] {error_msg}")
         console.print("💡 Try running with appropriate permissions or check directory access")
         sys.exit(1)
     except Exception as e:
         error_msg = f"Failed to initialize: {e}"
-        logger.error(error_msg, exc_info=True)
+        if logger:
+            logger.error(error_msg, exc_info=True) # pragma: no cover
         console.print(f"❌ [red]Error:[/red] {error_msg}")
         sys.exit(1)
 
@@ -316,4 +318,4 @@ def clean(
 
 
 if __name__ == "__main__":
-    app()
+    app() # pragma: no cover

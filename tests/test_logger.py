@@ -28,6 +28,20 @@ def test_logger_creates_log_file_and_console(tmp_path):
         assert "error message" in content
 
 
+def test_initialize_logging_debug(tmp_path, monkeypatch):
+    # Patch Path.home to tmp_path for isolation
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    from browser_launcher import logger as logger_mod
+    logger_mod._logger = None
+    # Call initialize_logging with debug=True to cover log_level = 'DEBUG'
+    logger_mod.initialize_logging(debug=True, console_logging=True)
+    log_dir = tmp_path / ".browser_launcher" / "logs"
+    log_file = log_dir / "browser_launcher.log"
+    assert log_file.exists()
+    with open(log_file) as f:
+        content = f.read()
+        assert "Logging initialized at DEBUG level" in content
+
 def test_logger_respects_log_level(tmp_path):
     log_dir = tmp_path / "logs"
     logger_obj = BrowserLauncherLogger(log_dir, log_level="WARNING", console_logging=False)
