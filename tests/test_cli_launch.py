@@ -370,10 +370,6 @@ def test_launch_eoferror(monkeypatch):
         "browser_launcher.cli.get_current_logger",
         lambda: MagicMock(info=MagicMock(), error=MagicMock()),
     )
-    # Simulate EOF by passing input=None
-    #     monkeypatch.setattr(BrowserLauncherConfig, "get_console_logging", lambda self: True)
-    # from browser_launcher.browsers.base import BrowserLauncher
-    # monkeypatch.setattr(BrowserLauncher, "driver", lambda self: )
 
     result = runner.invoke(app, ["launch"], input=None)
     assert result.exit_code == 0

@@ -32,7 +32,9 @@ def get_log_directory() -> Path:
 
 
 def create_config_template() -> str:
-    """Create the content for the initial configuration file by reading from assets/default_config.toml."""
+    """Create the content for the initial configuration file by reading
+    from assets/default_config.toml.
+    """
     with (
         resources.files("browser_launcher")
         .joinpath("assets/default_config.toml")
@@ -165,7 +167,7 @@ def init(
 
 
 @app.command()
-def launch(
+def launch(  # noqa: C901
     url: Optional[str] = typer.Argument(None, help="URL to open"),
     browser: Optional[str] = typer.Option(None, "--browser", help="Browser to use"),
     headless: bool = typer.Option(
@@ -263,7 +265,8 @@ def launch(
         while True:
             if bl.driver.session_id is None:
                 console.print(
-                    "session has gone bad, you need to relaunch to be able to capture screenshot"
+                    "session has gone bad, you need to relaunch to be able to "
+                    "capture screenshot"
                 )
             char = sys.stdin.read(1)
             if not char:
@@ -278,7 +281,7 @@ def launch(
 
 
 @app.command()
-def clean(
+def clean(  # noqa: C901
     force: bool = typer.Option(
         False, "--force", help="Force cleanup without confirmation"
     ),

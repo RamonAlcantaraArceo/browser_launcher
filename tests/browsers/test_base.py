@@ -34,7 +34,8 @@ class TestBrowserLauncherInterface:
             # Missing launch()
 
         with pytest.raises(TypeError):
-            # Cannot instantiate abstract class with missing launch(); should raise TypeError
+            # Cannot instantiate abstract class with missing launch();
+            # should raise TypeError
             IncompleteChrome(
                 BrowserConfig(
                     binary_path=None,
@@ -59,7 +60,8 @@ class TestBrowserLauncherInterface:
             # Missing build_command_args()
 
         with pytest.raises(TypeError):
-            # Cannot instantiate abstract class with missing build_command_args(); should raise TypeError
+            # Cannot instantiate abstract class with missing build_command_args();
+            # should raise TypeError
             IncompleteChrome(
                 BrowserConfig(
                     binary_path=None,
@@ -83,7 +85,8 @@ class TestBrowserLauncherInterface:
             # Missing browser_name property
 
         with pytest.raises(TypeError):
-            # Cannot instantiate abstract class with missing browser_name property; should raise TypeError
+            # Cannot instantiate abstract class with missing browser_name property
+            # should raise TypeError
             IncompleteChrome(
                 BrowserConfig(
                     binary_path=None,

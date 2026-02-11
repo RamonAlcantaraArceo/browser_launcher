@@ -10,7 +10,8 @@ from browser_launcher.browsers.base import BrowserConfig
 
 class BrowserLauncherConfig:
     def get_console_logging(self) -> bool:
-        """Return the console_logging setting from config, defaulting to False if not present."""
+        """Return the console_logging setting from config,
+        defaulting to False if not present."""
         return self.config_data.get("logging", {}).get("console_logging", False)
 
     """Load and manage browser launcher configuration from TOML."""

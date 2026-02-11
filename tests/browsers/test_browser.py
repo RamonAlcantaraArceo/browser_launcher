@@ -1,4 +1,5 @@
-"""Unified tests for all browser launcher implementations: Chrome, Firefox, Safari, Edge."""
+"""Unified tests for all browser launcher implementations:
+Chrome, Firefox, Safari, Edge."""
 
 from pathlib import Path
 from unittest import mock
