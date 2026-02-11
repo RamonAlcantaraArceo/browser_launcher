@@ -44,3 +44,25 @@ def test_clean_handles_nonexistent_directory_verbose(tmp_path, monkeypatch):
     result = runner.invoke(app, ["clean", "--force", "--verbose"])
     assert "does not exist" in result.output
     assert "Nothing to clean up" in result.output
+
+def test_clean_permission_error(tmp_path, monkeypatch):
+    home_dir = setup_temp_home(tmp_path)
+    monkeypatch.setattr("browser_launcher.cli.get_home_directory", lambda: home_dir)
+    # Simulate PermissionError in shutil.rmtree
+    monkeypatch.setattr("shutil.rmtree", lambda path: (_ for _ in ()).throw(PermissionError("Mock permission error")))
+    runner = CliRunner()
+    result = runner.invoke(app, ["clean", "--force"])
+    assert "Permission denied" in result.output
+    assert "Error:" in result.output
+    assert result.exit_code != 0
+
+def test_clean_general_exception(tmp_path, monkeypatch):
+    home_dir = setup_temp_home(tmp_path)
+    monkeypatch.setattr("browser_launcher.cli.get_home_directory", lambda: home_dir)
+    # Simulate generic Exception in shutil.rmtree
+    monkeypatch.setattr("shutil.rmtree", lambda path: (_ for _ in ()).throw(Exception("Mock general error")))
+    runner = CliRunner()
+    result = runner.invoke(app, ["clean", "--force"])
+    assert "Failed to clean up" in result.output
+    assert "Error:" in result.output
+    assert result.exit_code != 0

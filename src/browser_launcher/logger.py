@@ -114,23 +114,20 @@ class BrowserLauncherLogger:
 
 
 def get_logger(
-    log_dir: Optional[Path] = None,
+    log_dir: Path,
     log_level: str = "INFO",
     console_logging: bool = True
 ) -> logging.Logger:
     """Get a configured logger instance.
     
     Args:
-        log_dir: Directory for log files (defaults to ~/.browser_launcher/logs)
+        log_dir: Directory for log files
         log_level: Logging level
         console_logging: Whether to enable console logging
     
     Returns:
         Configured logger instance
     """
-    if log_dir is None:
-        log_dir = Path.home() / ".browser_launcher" / "logs"
-    
     # Use a global instance to avoid multiple handlers
     global _instance
     if _instance is None:
@@ -165,11 +162,12 @@ def setup_logging(
     return get_logger(log_dir, log_level, console_logging)
 
 
-def initialize_logging(verbose: bool = False, debug: bool = False) -> None:
+def initialize_logging(verbose: bool = False, debug: bool = False, console_logging: bool = False) -> None:
     """Initialize logging based on verbosity settings.
     Args:
         verbose: Enable verbose logging (INFO level)
         debug: Enable debug logging (DEBUG level)
+        console_logging: Enable console logging (default False)
     """
     global _logger
     # Determine log level
@@ -179,14 +177,6 @@ def initialize_logging(verbose: bool = False, debug: bool = False) -> None:
         log_level = "INFO"
     else:
         log_level = "WARNING"
-
-    # Always read console_logging from config file
-    try:
-        from browser_launcher.config import BrowserLauncherConfig
-        config_loader = BrowserLauncherConfig()
-        console_logging = config_loader.get_console_logging()
-    except Exception:
-        console_logging = False
 
     log_dir = Path.home() / ".browser_launcher" / "logs"
     _logger = setup_logging(

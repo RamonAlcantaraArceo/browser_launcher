@@ -9,7 +9,9 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 
-from .logger import get_command_context, initialize_logging, get_current_logger
+from browser_launcher.config import BrowserLauncherConfig
+from browser_launcher.browsers.factory import BrowserFactory
+from browser_launcher.logger import get_command_context, initialize_logging, get_current_logger
 
 app = typer.Typer(help="Browser launcher CLI tool")
 console = Console()
@@ -31,6 +33,15 @@ def create_config_template() -> str:
         return f.read().decode("utf-8")
 
 
+def get_console_logging_setting() -> bool:
+    """Read console_logging setting from config file, fallback to False on error."""
+    try:
+        config_loader = BrowserLauncherConfig()
+        return config_loader.get_console_logging()
+    except Exception:
+        return False
+
+
 @app.command()
 def init(
     force: bool = typer.Option(False, "--force", help="Force reinitialize even if directory exists"),
@@ -49,8 +60,11 @@ def init(
     home_dir = get_home_directory()
     home_dir_exists = home_dir.exists()
 
+    # Always read console_logging from config file
+    console_logging = get_console_logging_setting()
+
     # Initialize logging first
-    initialize_logging(verbose=verbose, debug=debug)
+    initialize_logging(verbose=verbose, debug=debug, console_logging=console_logging)
     logger = get_current_logger()
     if logger is None:
         raise RuntimeError("Logger was not initialized correctly.")
@@ -139,8 +153,11 @@ def launch(
     - --debug: DEBUG level console logging including internal execution flow
     - File logging: Always active regardless of console flags
     """
+    # Always read console_logging from config file
+    console_logging = get_console_logging_setting()
+
     # Initialize logging first
-    initialize_logging(verbose=verbose, debug=debug)
+    initialize_logging(verbose=verbose, debug=debug, console_logging=console_logging)
     logger = get_current_logger()
     if logger is None:
         raise RuntimeError("Logger was not initialized correctly.")
@@ -153,9 +170,6 @@ def launch(
     logger.info(f"Starting browser launch - {context}")
     
     # Load configuration
-    from browser_launcher.config import BrowserLauncherConfig
-    from browser_launcher.browsers.factory import BrowserFactory
-    
     try:
         config_loader = BrowserLauncherConfig()
     except FileNotFoundError as e:
