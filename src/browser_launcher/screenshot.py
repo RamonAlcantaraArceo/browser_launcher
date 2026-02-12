@@ -5,7 +5,6 @@ from pathlib import Path
 from time import sleep
 
 from selenium import webdriver
-
 from selenium.common.exceptions import InvalidSessionIdException, NoSuchWindowException
 
 # ruff: noqa: E501
