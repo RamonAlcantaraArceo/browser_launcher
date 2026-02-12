@@ -1,4 +1,5 @@
 import base64
+import logging
 import uuid
 from datetime import date
 from pathlib import Path
@@ -6,7 +7,7 @@ from time import sleep
 
 from selenium import webdriver
 from selenium.common.exceptions import InvalidSessionIdException, NoSuchWindowException
-import logging 
+
 # ruff: noqa: E501
 
 
