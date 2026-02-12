@@ -1,5 +1,7 @@
 """Tests for CLI cookie management arguments and function definitions."""
 
+from unittest.mock import MagicMock
+
 import pytest
 from typer.testing import CliRunner
 
@@ -45,8 +47,11 @@ def test_inject_and_verify_cookies_signature():
     class DummyLauncher:
         pass
 
+    mock_config = MagicMock()
     try:
-        inject_and_verify_cookies(DummyLauncher(), "example_com", "alice", "staging")
+        inject_and_verify_cookies(
+            DummyLauncher(), "example_com", "alice", "staging", mock_config
+        )
     except NotImplementedError:
         pass
     except Exception:

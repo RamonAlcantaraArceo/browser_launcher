@@ -6,9 +6,22 @@ cookie rules and cache.
 All docstrings use Google-style format.
 """
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
+
+
+def config_key_to_domain(key: str) -> str:
+    """Convert config domain key (underscores) to real domain (dots)."""
+    return key.replace("_", ".")
+
+
+def domain_to_config_key(domain: str) -> str:
+    """Convert real domain (dots) to config domain key (underscores)."""
+    return domain.replace(".", "_")
 
 
 @dataclass
@@ -41,6 +54,7 @@ class CacheEntry:
     value: str
     timestamp: datetime
     ttl_seconds: int = 28800  # Default 8 hours
+    domain: str = ""
 
     def is_valid(self, now: Optional[datetime] = None) -> bool:
         """Check if the cache entry is still valid based on TTL.
@@ -77,19 +91,19 @@ class CookieConfig:
         Returns:
             List[CookieRule]: List of cookie rules for this context.
         """
-        section = (
-            self.config_data.get("users", {}).get(user, {}).get(env, {}).get(domain, {})
-        )
+        section = self.config_data.get("users", {}).get(user, {}).get(env, {})
         rules = []
-        for cookie in section.get("cookies", []):
-            rules.append(
-                CookieRule(
-                    domain=domain,
-                    name=cookie.get("name"),
-                    variants=cookie.get("variants", {}),
-                    ttl_seconds=section.get("ttl_seconds", 28800),
+        cookies = section.get("cookies", {})
+        for name, cookie in cookies.items():
+            if cookie.get("domain") == domain:
+                rules.append(
+                    CookieRule(
+                        domain=domain,
+                        name=name,
+                        variants=cookie.get("variants", {}),
+                        ttl_seconds=cookie.get("ttl_seconds", 28800),
+                    )
                 )
-            )
         return rules
 
     def get_cache_entries(self, user: str, env: str, domain: str) -> List[CacheEntry]:
@@ -103,22 +117,36 @@ class CookieConfig:
         Returns:
             List[CacheEntry]: List of cache entries for this context.
         """
-        section = (
-            self.config_data.get("users", {}).get(user, {}).get(env, {}).get(domain, {})
-        )
+        section = self.config_data.get("users", {}).get(user, {}).get(env, {})
         entries = []
-        for cookie in section.get("cookies", []):
-            if "value" in cookie and "timestamp" in cookie:
-                ts = datetime.fromisoformat(cookie["timestamp"])
+        cookies = section.get("cookies", {})
+        logger.debug(
+            f"Loading cache entries for {user}/{env}/{domain}. Found cookies: "
+            f"{list(cookies.keys())}"
+        )
+        for name, cookie in cookies.items():
+            if cookie.get("domain") == domain and (
+                "value" in cookie
+                and "timestamp" in cookie
+                and cookie["value"] != "..."
+                and cookie["timestamp"] != "..."
+            ):
+                try:
+                    ts = datetime.fromisoformat(cookie["timestamp"])
+                except Exception:
+                    continue
                 if ts.tzinfo is None:
                     ts = ts.replace(tzinfo=timezone.utc)
                 entries.append(
                     CacheEntry(
                         value=cookie["value"],
                         timestamp=ts,
-                        ttl_seconds=section.get("ttl_seconds", 28800),
+                        ttl_seconds=cookie.get("ttl_seconds", 28800),
                     )
                 )
+
+        logger.info(f"Loaded {len(entries)} cache entries for {user}/{env}/{domain}.")
+        logger.debug(f"Cache entries: {entries}")
         return entries
 
     def load_cookie_cache(
@@ -134,19 +162,27 @@ class CookieConfig:
         Returns:
             Dict[str, CacheEntry]: Mapping of cookie name to cache entry.
         """
-        section = (
-            self.config_data.get("users", {}).get(user, {}).get(env, {}).get(domain, {})
-        )
+        section = self.config_data.get("users", {}).get(user, {}).get(env, {})
         cache: Dict[str, CacheEntry] = {}
-        for cookie in section.get("cookies", []):
-            if "name" in cookie and "value" in cookie and "timestamp" in cookie:
-                ts = datetime.fromisoformat(cookie["timestamp"])
+        cookies = section.get("cookies", {})
+        for name, cookie in cookies.items():
+            if cookie.get("domain") == domain and (
+                "value" in cookie
+                and "timestamp" in cookie
+                and cookie["value"] != "..."
+                and cookie["timestamp"] != "..."
+            ):
+                try:
+                    ts = datetime.fromisoformat(cookie["timestamp"])
+                except Exception:
+                    continue
                 if ts.tzinfo is None:
                     ts = ts.replace(tzinfo=timezone.utc)
-                cache[cookie["name"]] = CacheEntry(
+                cache[name] = CacheEntry(
                     value=cookie["value"],
                     timestamp=ts,
-                    ttl_seconds=section.get("ttl_seconds", 28800),
+                    ttl_seconds=cookie.get("ttl_seconds", 28800),
+                    domain=domain,
                 )
         return cache
 
@@ -168,18 +204,19 @@ class CookieConfig:
             self.config_data.setdefault("users", {})
             .setdefault(user, {})
             .setdefault(env, {})
-            .setdefault(domain, {})
         )
-        cookies_list = []
+        cookies_dict = section.setdefault("cookies", {})
         for name, entry in cache.items():
-            cookies_list.append(
-                {
-                    "name": name,
-                    "value": entry.value,
-                    "timestamp": entry.timestamp.isoformat(),
-                }
-            )
-        section["cookies"] = cookies_list
+            cookies_dict[name] = {
+                "domain": domain,
+                "value": entry.value,
+                "timestamp": entry.timestamp.isoformat(),
+            }
+        section["cookies"] = cookies_dict
+
+        logger.info(
+            f"Saved cookie cache for {user}/{env}/{domain} with {len(cache)} entries."
+        )
 
     def update_cookie_cache(
         self,
@@ -208,28 +245,18 @@ class CookieConfig:
             self.config_data.setdefault("users", {})
             .setdefault(user, {})
             .setdefault(env, {})
-            .setdefault(domain, {})
         )
-        cookies = section.setdefault("cookies", [])
+        cookies = section.setdefault("cookies", {})
         now = datetime.now(timezone.utc)
-        # Find existing cookie
-        found = False
-        for cookie in cookies:
-            if cookie.get("name") == name:
-                cookie["value"] = value
-                cookie["timestamp"] = now.isoformat()
-                found = True
-                break
-        if not found:
-            cookies.append(
-                {
-                    "name": name,
-                    "value": value,
-                    "timestamp": now.isoformat(),
-                }
-            )
+        cookies[name] = {
+            "domain": domain,
+            "value": value,
+            "timestamp": now.isoformat(),
+        }
         if ttl_seconds is not None:
-            section["ttl_seconds"] = ttl_seconds
+            cookies[name]["ttl_seconds"] = ttl_seconds
+
+        logger.info(f"Updated cookie cache for {user}/{env}/{domain}: {name}")
 
     def clear_cookie_cache(self, user: str, env: str, domain: str) -> None:
         """Clear all cookie cache entries for a given user, environment, and domain.
@@ -246,9 +273,16 @@ class CookieConfig:
             self.config_data.setdefault("users", {})
             .setdefault(user, {})
             .setdefault(env, {})
-            .setdefault(domain, {})
         )
-        section["cookies"] = []
+        cookies = section.get("cookies", {})
+        # Remove all cookies matching this domain
+        names_to_remove = [
+            name for name, cookie in cookies.items() if cookie.get("domain") == domain
+        ]
+        for name in names_to_remove:
+            del cookies[name]
+
+        logger.info(f"Cleared cookie cache for {user}/{env}/{domain}.")
 
     def get_valid_cookie_cache(
         self, user: str, env: str, domain: str
@@ -286,20 +320,26 @@ class CookieConfig:
         Returns:
             Dict[str, CacheEntry]: Mapping of cookie name to cache entry.
         """
-        section = (
-            self.config_data.get("users", {}).get(user, {}).get(env, {}).get(domain, {})
-        )
-        ttl = section.get("ttl_seconds", 28800)
+        section = self.config_data.get("users", {}).get(user, {}).get(env, {})
         cache: Dict[str, CacheEntry] = {}
-        for cookie in section.get("cookies", []):
-            if "name" in cookie and "value" in cookie and "timestamp" in cookie:
-                ts = datetime.fromisoformat(cookie["timestamp"])
+        cookies = section.get("cookies", {})
+        for name, cookie in cookies.items():
+            if cookie.get("domain") == domain and (
+                "value" in cookie
+                and "timestamp" in cookie
+                and cookie["value"] != "..."
+                and cookie["timestamp"] != "..."
+            ):
+                try:
+                    ts = datetime.fromisoformat(cookie["timestamp"])
+                except Exception:
+                    continue
                 if ts.tzinfo is None:
                     ts = ts.replace(tzinfo=timezone.utc)
-                cache[cookie["name"]] = CacheEntry(
+                cache[name] = CacheEntry(
                     value=cookie["value"],
                     timestamp=ts,
-                    ttl_seconds=ttl,
+                    ttl_seconds=cookie.get("ttl_seconds", 28800),
                 )
         return cache
 
@@ -322,18 +362,20 @@ class CookieConfig:
             self.config_data.setdefault("users", {})
             .setdefault(user, {})
             .setdefault(env, {})
-            .setdefault(domain, {})
         )
-        cookies_list = []
+        cookies_dict = section.setdefault("cookies", {})
         for name, entry in cookies.items():
-            cookies_list.append(
-                {
-                    "name": name,
-                    "value": entry.value,
-                    "timestamp": entry.timestamp.isoformat(),
-                }
-            )
-        section["cookies"] = cookies_list
+            cookies_dict[name] = {
+                "domain": domain,
+                "value": entry.value,
+                "timestamp": entry.timestamp.isoformat(),
+            }
+        section["cookies"] = cookies_dict
+
+        logger.info(
+            f"Saved cookies to cache for {user}/{env}/{domain} with "
+            f"{len(cookies)} entries."
+        )
 
     def prune_expired_cookies(self, user: str, env: str, domain: str) -> None:
         """Remove stale (expired) cookie entries from config for a given user,
@@ -351,31 +393,40 @@ class CookieConfig:
             self.config_data.setdefault("users", {})
             .setdefault(user, {})
             .setdefault(env, {})
-            .setdefault(domain, {})
         )
-        ttl = section.get("ttl_seconds", 28800)
         now = datetime.now(timezone.utc)
-        cookies = section.get("cookies", [])
-        valid_cookies = []
-        for cookie in cookies:
-            if "name" in cookie and "value" in cookie and "timestamp" in cookie:
-                ts = datetime.fromisoformat(cookie["timestamp"])
+        cookies = section.get("cookies", {})
+        valid_cookies = {}
+        for name, cookie in cookies.items():
+            if cookie.get("domain") == domain and (
+                "value" in cookie
+                and "timestamp" in cookie
+                and cookie["value"] != "..."
+                and cookie["timestamp"] != "..."
+            ):
+                try:
+                    ts = datetime.fromisoformat(cookie["timestamp"])
+                except Exception:
+                    continue
                 if ts.tzinfo is None:
                     ts = ts.replace(tzinfo=timezone.utc)
                 entry = CacheEntry(
                     value=cookie["value"],
                     timestamp=ts,
-                    ttl_seconds=ttl,
+                    ttl_seconds=cookie.get("ttl_seconds", 28800),
                 )
                 if entry.is_valid(now=now):
-                    valid_cookies.append(
-                        {
-                            "name": cookie["name"],
-                            "value": cookie["value"],
-                            "timestamp": cookie["timestamp"],
-                        }
-                    )
+                    valid_cookies[name] = cookie
+            else:
+                # Keep cookies for other domains
+                valid_cookies[name] = cookie
         section["cookies"] = valid_cookies
+
+        logger.info(
+            f"Pruned expired cookies for {user}/{env}/{domain}. "
+            f"Remaining: "
+            f"{len([c for c in valid_cookies.values() if c.get('domain') == domain])}."
+        )
 
 
 def read_cookies_from_browser(driver: Any, domain: str) -> List[Dict[str, Any]]:
@@ -400,15 +451,32 @@ def read_cookies_from_browser(driver: Any, domain: str) -> List[Dict[str, Any]]:
     except AttributeError as e:
         raise AttributeError(f"Driver does not have get_cookies() method: {e}") from e
 
-    filtered_cookies = [
-        cookie for cookie in all_cookies if cookie.get("domain", "").endswith(domain)
-    ]
+    # Convert config key to real domain for filtering
+    real_domain = config_key_to_domain(domain)
+    filtered_cookies = []
+    excluded_cookies = []
+    for cookie in all_cookies:
+        cookie_domain = cookie.get("domain", "")
+        if cookie_domain.endswith(real_domain):
+            filtered_cookies.append(cookie)
+            logger.debug(
+                f"Including cookie '{cookie.get('name')}' with domain "
+                f"'{cookie_domain}' for filter '{real_domain}'."
+            )
+        else:
+            excluded_cookies.append(cookie)
+            logger.debug(
+                f"Excluding cookie '{cookie.get('name')}' with domain "
+                f"'{cookie_domain}' for filter '{real_domain}'."
+            )
+    logger.info(
+        f"Read {len(filtered_cookies)} cookies for domain '{real_domain}' from browser."
+    )
+    logger.debug(f"Cookies read from browser: {filtered_cookies}")
     return filtered_cookies
 
 
-def write_cookies_to_browser(
-    driver: Any, cookies: List[Dict[str, Any]], domain: str
-) -> None:
+def write_cookies_to_browser(driver: Any, cookies: List[Dict[str, Any]]) -> None:
     """Inject cookies into the browser via the Selenium driver.
 
     Adds the given list of cookies to the browser session. Handles any exceptions
@@ -427,8 +495,15 @@ def write_cookies_to_browser(
         AttributeError: If driver does not have an add_cookie() method.
     """
     for cookie in cookies:
+        cookie_to_add = cookie.copy()
+        # Do NOT set the domain field; let Selenium use the current page's domain
+        poped_domain = cookie_to_add.pop("domain", None)
         try:
-            driver.add_cookie(cookie)
+            driver.add_cookie(cookie_to_add)
+            logger.debug(
+                f"Injected cookie '{cookie.get('name')}' for domain "
+                f"'{poped_domain}' into browser."
+            )
         except AttributeError as e:
             raise AttributeError(
                 f"Driver does not have add_cookie() method: {e}"
@@ -436,6 +511,11 @@ def write_cookies_to_browser(
         except Exception:
             # Log or handle exceptions during individual cookie additions
             # Continue with remaining cookies rather than failing entirely
+            logger.error(
+                f"Failed to inject cookie '{cookie.get('name')}' for "
+                f"domain '{poped_domain}'",
+                exc_info=True,
+            )
             pass
 
 
@@ -461,7 +541,7 @@ def get_applicable_rules(
 
 def inject_and_verify_cookies(
     launcher: Any, domain: str, user: str, env: str, cookie_config: CookieConfig
-) -> None:
+) -> Optional[list]:
     """Main integration hook to inject cached cookies and verify authenticity.
 
     Performs the following workflow:
@@ -486,32 +566,40 @@ def inject_and_verify_cookies(
     Raises:
         AttributeError: If launcher lacks expected driver or logger attributes.
     """
+    cookies_to_inject: Optional[list] = None
     try:
-        # Get valid cached cookies for this context
-        valid_cache = cookie_config.get_valid_cookie_cache(user, env, domain)
+        target_domains = [
+            val["domain"]
+            for val in cookie_config.config_data["users"][user][env]["cookies"].values()
+        ]
+
+        valid_cache = {}
+        for target_domain in target_domains:
+            value = cookie_config.get_valid_cookie_cache(user, env, target_domain)
+            valid_cache.update(value)
 
         if valid_cache:
-            launcher.logger.info(
+            logger.info(
                 f"Found {len(valid_cache)} valid cached cookies for "
-                f"{user}/{env}/{domain}"
+                f"{user}/{env}:{domain}"
             )
+
             # Convert cache entries to cookie dicts for injection
             cookies_to_inject = [
-                {"name": name, "value": entry.value}
+                {"name": name, "value": entry.value, "domain": entry.domain}
                 for name, entry in valid_cache.items()
             ]
+
             # Inject cookies into the browser
-            write_cookies_to_browser(launcher.driver, cookies_to_inject, domain)
+            write_cookies_to_browser(launcher.driver, cookies_to_inject)
         else:
-            launcher.logger.info(
-                f"No valid cached cookies found for {user}/{env}/{domain}"
-            )
+            logger.info(f"No valid cached cookies found for {user}/{env}:{domain}")
 
         # Read cookies back from the browser to verify or update cache
         browser_cookies = read_cookies_from_browser(launcher.driver, domain)
 
         if browser_cookies:
-            launcher.logger.info(
+            logger.info(
                 f"Read {len(browser_cookies)} cookies from browser for domain {domain}"
             )
             # Update cache with cookies from browser
@@ -521,14 +609,13 @@ def inject_and_verify_cookies(
                 )
 
     except AttributeError as e:
-        if hasattr(launcher, "logger") and launcher.logger:
-            launcher.logger.error(
-                f"Error during cookie injection/verification: {e}", exc_info=True
-            )
+        logger.error(f"Error during cookie injection/verification: {e}", exc_info=True)
         raise
     except Exception as e:
-        if hasattr(launcher, "logger") and launcher.logger:
-            launcher.logger.error(
-                f"Unexpected error during cookie injection/verification: {e}",
-                exc_info=True,
-            )
+        logger.error(
+            f"Unexpected error during cookie injection/verification: {e}",
+            exc_info=True,
+        )
+        raise
+
+    return cookies_to_inject

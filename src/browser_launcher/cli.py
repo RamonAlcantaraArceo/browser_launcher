@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
+import tomli_w
 import typer
 from rich.console import Console
 from rich.panel import Panel
@@ -301,9 +302,6 @@ def launch(  # noqa: C901
     try:
         parsed_url = urlparse(launch_url)
         domain = parsed_url.netloc or parsed_url.path.split("/")[0]
-        # Normalize domain to match config key format (replace dots with underscores)
-        # For example: example.com -> example_com
-        domain_key = domain.replace(".", "_").lower()
 
         # Load cookie config and inject cached cookies if available
         try:
@@ -313,7 +311,18 @@ def launch(  # noqa: C901
                 f"Attempting to inject cookies for domain {domain} "
                 f"(user={user}, env={env})"
             )
-            inject_and_verify_cookies(bl, domain_key, user, env, cookie_config)
+
+            injected_cookies = inject_and_verify_cookies(
+                bl, domain, user, env, cookie_config
+            )
+            if injected_cookies:
+                console.print(
+                    f"✅ Injected {len(injected_cookies)} cookies: "
+                    f"{[cookie['name'] for cookie in injected_cookies]}"
+                )
+
+                if url:
+                    bl.safe_get_address(url + "/ui")
         except Exception as e:
             logger.warning(
                 f"Failed to inject/verify cookies for {domain}: {e}", exc_info=True
@@ -350,9 +359,9 @@ def launch(  # noqa: C901
                         driver=bl.driver,
                         delay=0.5,
                     )
-                    typer.echo(f"Captured: {screenshot_name}")
+                    console.print(f"Captured: {screenshot_name}")
                 except Exception as e:
-                    typer.echo(
+                    console.print(
                         "session has gone bad, you need to relaunch to be able"
                         f"to capture screenshot {type(e)} {e!r}"
                     )
@@ -360,44 +369,58 @@ def launch(  # noqa: C901
             elif char.lower() == "s":
                 # Capture and cache cookies from the browser
                 try:
-                    browser_cookies = read_cookies_from_browser(bl.driver, domain)
-                    if browser_cookies:
+                    target_cookies = list(
+                        cookie_config_data["users"][user][env]["cookies"].keys()
+                    )
+                    target_domains = [
+                        val["domain"]
+                        for val in cookie_config_data["users"][user][env][
+                            "cookies"
+                        ].values()
+                    ]
+                    browser_cookies = []
+                    target_browser_cookies = []
+                    for target_domain in target_domains:
+                        browser_cookies.extend(
+                            read_cookies_from_browser(bl.driver, target_domain)
+                        )
+                    for cookie in browser_cookies:
+                        if cookie["name"] in target_cookies:
+                            target_browser_cookies.append(cookie)
+
+                    logger.info(
+                        f"Read {len(target_browser_cookies)} cookies from browser for"
+                        f" {user}/{env}:{target_domain}"
+                    )
+                    if target_browser_cookies:
                         # Update cache entries for each cookie
-                        for cookie in browser_cookies:
+                        for cookie in target_browser_cookies:
                             cookie_config.update_cookie_cache(
                                 user,
                                 env,
-                                domain_key,
+                                cookie_config_data["users"][user][env]["cookies"][
+                                    cookie["name"]
+                                ]["domain"],
                                 cookie["name"],
                                 cookie.get("value", ""),
                             )
                         # Save config back to file
-                        try:
-                            import tomli_w
 
-                            config_file = (
-                                get_home_directory() / "config.toml"
-                            )
-                            with open(config_file, "wb") as f:
-                                tomli_w.dump(cookie_config.config_data, f)
-                            console.print(
-                                f"✅ Cached {len(browser_cookies)} cookies for "
-                                f"{user}/{env}/{domain}"
-                            )
-                            logger.info(
-                                f"Saved {len(browser_cookies)} cookies "
-                                f"for {user}/{env}/{domain}"
-                            )
-                        except ImportError:
-                            console.print(
-                                "⚠️ tomli-w not available; cookies cached in memory "
-                                "but not persisted to file"
-                            )
-                            logger.warning(
-                                "tomli-w not available for config persistence"
-                            )
+                        config_file = get_home_directory() / "config.toml"
+                        with open(config_file, "wb") as f:
+                            tomli_w.dump(cookie_config.config_data, f)
+                        console.print(
+                            f"✅ Cached {len(target_browser_cookies)} cookies for "
+                            f"{user}/{env}/{domain}"
+                        )
+                        logger.info(
+                            f"Saved {len(target_browser_cookies)} cookies "
+                            f"for {user}/{env}/{domain}"
+                        )
+                        logger.debug(f"Cookies: {cookie_config.config_data}")
                     else:
                         console.print(f"⚠️ No cookies found for domain {domain}")
+                        logger.debug(f"⚠️ No cookies found for domain {domain}")
                 except Exception as e:
                     console.print(f"❌ Error caching cookies: {e}")
                     logger.error(f"Error caching cookies: {e}", exc_info=True)

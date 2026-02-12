@@ -44,16 +44,17 @@ def test_cookie_config_get_rules_and_cache_entries():
         "users": {
             "alice": {
                 "prod": {
-                    "example_com": {
-                        "cookies": [
-                            {
-                                "name": "sessionid",
-                                "value": "abc",
-                                "timestamp": now.isoformat(),
-                            },
-                            {"name": "auth", "variants": {"chrome": "auth_chrome"}},
-                        ],
-                        "ttl_seconds": 1000,
+                    "cookies": {
+                        "sessionid": {
+                            "domain": "example_com",
+                            "value": "abc",
+                            "timestamp": now.isoformat(),
+                            "ttl_seconds": 1000,
+                        },
+                        "auth": {
+                            "domain": "example_com",
+                            "variants": {"chrome": "auth_chrome"},
+                        },
                     }
                 }
             }
@@ -77,20 +78,19 @@ def test_load_cookie_cache_returns_dict_of_cache_entries():
         "users": {
             "bob": {
                 "dev": {
-                    "test_com": {
-                        "cookies": [
-                            {
-                                "name": "token",
-                                "value": "xyz",
-                                "timestamp": now.isoformat(),
-                            },
-                            {
-                                "name": "expired",
-                                "value": "old",
-                                "timestamp": (now - timedelta(hours=9)).isoformat(),
-                            },
-                        ],
-                        "ttl_seconds": 28800,
+                    "cookies": {
+                        "token": {
+                            "domain": "test_com",
+                            "value": "xyz",
+                            "timestamp": now.isoformat(),
+                            "ttl_seconds": 28800,
+                        },
+                        "expired": {
+                            "domain": "test_com",
+                            "value": "old",
+                            "timestamp": (now - timedelta(hours=9)).isoformat(),
+                            "ttl_seconds": 28800,
+                        },
                     }
                 }
             }
@@ -110,32 +110,23 @@ def test_load_cookie_cache_returns_dict_of_cache_entries():
 
 def test_save_cookie_cache_updates_config_data():
     now = datetime.now(timezone.utc).replace(microsecond=0)
-    config_data = {
-        "users": {
-            "bob": {
-                "dev": {
-                    "test_com": {
-                        "cookies": [],
-                        "ttl_seconds": 28800,
-                    }
-                }
-            }
-        }
-    }
+    config_data: dict[str, dict] = {"users": {"bob": {"dev": {"cookies": {}}}}}
     config = CookieConfig(config_data)
     cache = {
         "token": CacheEntry(value="xyz", timestamp=now, ttl_seconds=28800),
         "session": CacheEntry(value="abc", timestamp=now, ttl_seconds=28800),
     }
     config.save_cookie_cache("bob", "dev", "test_com", cache)
-    cookies = config_data["users"]["bob"]["dev"]["test_com"]["cookies"]
+    cookies = config_data["users"]["bob"]["dev"]["cookies"]
     assert len(cookies) == 2
-    names = {c["name"] for c in cookies}
-    assert "token" in names
-    assert "session" in names
-    for c in cookies:
-        assert c["value"] in ["xyz", "abc"]
-        assert c["timestamp"] == now.isoformat()
+    assert "token" in cookies
+    assert "session" in cookies
+    assert cookies["token"]["domain"] == "test_com"
+    assert cookies["token"]["value"] == "xyz"
+    assert cookies["token"]["timestamp"] == now.isoformat()
+    assert cookies["session"]["domain"] == "test_com"
+    assert cookies["session"]["value"] == "abc"
+    assert cookies["session"]["timestamp"] == now.isoformat()
 
 
 def test_update_cookie_cache_adds_and_modifies_entry():
@@ -144,15 +135,13 @@ def test_update_cookie_cache_adds_and_modifies_entry():
         "users": {
             "bob": {
                 "dev": {
-                    "test_com": {
-                        "cookies": [
-                            {
-                                "name": "token",
-                                "value": "xyz",
-                                "timestamp": (now - timedelta(hours=1)).isoformat(),
-                            }
-                        ],
-                        "ttl_seconds": 28800,
+                    "cookies": {
+                        "token": {
+                            "domain": "test_com",
+                            "value": "xyz",
+                            "timestamp": (now - timedelta(hours=1)).isoformat(),
+                            "ttl_seconds": 28800,
+                        }
                     }
                 }
             }
@@ -163,14 +152,16 @@ def test_update_cookie_cache_adds_and_modifies_entry():
     config.update_cookie_cache(
         "bob", "dev", "test_com", "token", "newval", ttl_seconds=1000
     )
-    cookies = config_data["users"]["bob"]["dev"]["test_com"]["cookies"]
-    token_cookie = next(c for c in cookies if c["name"] == "token")
+    cookies = config_data["users"]["bob"]["dev"]["cookies"]
+    token_cookie = cookies["token"]
     assert token_cookie["value"] == "newval"
+    assert token_cookie["domain"] == "test_com"
     assert token_cookie["timestamp"]  # Should be updated to now
     # Add new
     config.update_cookie_cache("bob", "dev", "test_com", "session", "abc")
-    session_cookie = next(c for c in cookies if c["name"] == "session")
+    session_cookie = cookies["session"]
     assert session_cookie["value"] == "abc"
+    assert session_cookie["domain"] == "test_com"
     assert session_cookie["timestamp"]
 
 
@@ -180,15 +171,19 @@ def test_clear_cookie_cache_removes_all_entries():
         "users": {
             "bob": {
                 "dev": {
-                    "test_com": {
-                        "cookies": [
-                            {
-                                "name": "token",
-                                "value": "xyz",
-                                "timestamp": now.isoformat(),
-                            }
-                        ],
-                        "ttl_seconds": 28800,
+                    "cookies": {
+                        "token": {
+                            "domain": "test_com",
+                            "value": "xyz",
+                            "timestamp": now.isoformat(),
+                            "ttl_seconds": 28800,
+                        },
+                        "other_domain_cookie": {
+                            "domain": "other_com",
+                            "value": "abc",
+                            "timestamp": now.isoformat(),
+                            "ttl_seconds": 28800,
+                        },
                     }
                 }
             }
@@ -196,8 +191,10 @@ def test_clear_cookie_cache_removes_all_entries():
     }
     config = CookieConfig(config_data)
     config.clear_cookie_cache("bob", "dev", "test_com")
-    cookies = config_data["users"]["bob"]["dev"]["test_com"]["cookies"]
-    assert cookies == []
+    cookies = config_data["users"]["bob"]["dev"]["cookies"]
+    # Only test_com cookie should be removed
+    assert "token" not in cookies
+    assert "other_domain_cookie" in cookies
 
 
 def test_get_valid_cookie_cache_filters_expired_entries():
@@ -206,20 +203,19 @@ def test_get_valid_cookie_cache_filters_expired_entries():
         "users": {
             "bob": {
                 "dev": {
-                    "test_com": {
-                        "cookies": [
-                            {
-                                "name": "token",
-                                "value": "xyz",
-                                "timestamp": now.isoformat(),
-                            },
-                            {
-                                "name": "expired",
-                                "value": "old",
-                                "timestamp": (now - timedelta(hours=9)).isoformat(),
-                            },
-                        ],
-                        "ttl_seconds": 28800,
+                    "cookies": {
+                        "token": {
+                            "domain": "test_com",
+                            "value": "xyz",
+                            "timestamp": now.isoformat(),
+                            "ttl_seconds": 28800,
+                        },
+                        "expired": {
+                            "domain": "test_com",
+                            "value": "old",
+                            "timestamp": (now - timedelta(hours=9)).isoformat(),
+                            "ttl_seconds": 28800,
+                        },
                     }
                 }
             }
@@ -238,20 +234,19 @@ def test_load_cookie_cache_from_config_returns_dict_of_cache_entries():
         "users": {
             "carol": {
                 "stage": {
-                    "demo_com": {
-                        "cookies": [
-                            {
-                                "name": "session",
-                                "value": "val",
-                                "timestamp": now.isoformat(),
-                            },
-                            {
-                                "name": "expired",
-                                "value": "old",
-                                "timestamp": (now - timedelta(hours=9)).isoformat(),
-                            },
-                        ],
-                        "ttl_seconds": 28800,
+                    "cookies": {
+                        "session": {
+                            "domain": "demo_com",
+                            "value": "val",
+                            "timestamp": now.isoformat(),
+                            "ttl_seconds": 28800,
+                        },
+                        "expired": {
+                            "domain": "demo_com",
+                            "value": "old",
+                            "timestamp": (now - timedelta(hours=9)).isoformat(),
+                            "ttl_seconds": 28800,
+                        },
                     }
                 }
             }
@@ -270,32 +265,23 @@ def test_load_cookie_cache_from_config_returns_dict_of_cache_entries():
 
 def test_save_cookies_to_cache_persists_entries():
     now = datetime.now(timezone.utc).replace(microsecond=0)
-    config_data = {
-        "users": {
-            "carol": {
-                "stage": {
-                    "demo_com": {
-                        "cookies": [],
-                        "ttl_seconds": 28800,
-                    }
-                }
-            }
-        }
-    }
+    config_data: dict[str, dict] = {"users": {"carol": {"stage": {"cookies": {}}}}}
     config = CookieConfig(config_data)
     cookies = {
         "session": CacheEntry(value="val", timestamp=now, ttl_seconds=28800),
         "token": CacheEntry(value="tok", timestamp=now, ttl_seconds=28800),
     }
     config.save_cookies_to_cache("carol", "stage", "demo_com", cookies)
-    persisted = config_data["users"]["carol"]["stage"]["demo_com"]["cookies"]
+    persisted = config_data["users"]["carol"]["stage"]["cookies"]
     assert len(persisted) == 2
-    names = {c["name"] for c in persisted}
-    assert "session" in names
-    assert "token" in names
-    for c in persisted:
-        assert c["value"] in ["val", "tok"]
-        assert c["timestamp"] == now.isoformat()
+    assert "session" in persisted
+    assert "token" in persisted
+    assert persisted["session"]["domain"] == "demo_com"
+    assert persisted["session"]["value"] == "val"
+    assert persisted["session"]["timestamp"] == now.isoformat()
+    assert persisted["token"]["domain"] == "demo_com"
+    assert persisted["token"]["value"] == "tok"
+    assert persisted["token"]["timestamp"] == now.isoformat()
 
 
 def test_prune_expired_cookies_removes_stale_entries():
@@ -304,20 +290,25 @@ def test_prune_expired_cookies_removes_stale_entries():
         "users": {
             "carol": {
                 "stage": {
-                    "demo_com": {
-                        "cookies": [
-                            {
-                                "name": "session",
-                                "value": "val",
-                                "timestamp": now.isoformat(),
-                            },
-                            {
-                                "name": "expired",
-                                "value": "old",
-                                "timestamp": (now - timedelta(hours=9)).isoformat(),
-                            },
-                        ],
-                        "ttl_seconds": 28800,
+                    "cookies": {
+                        "session": {
+                            "domain": "demo_com",
+                            "value": "val",
+                            "timestamp": now.isoformat(),
+                            "ttl_seconds": 28800,
+                        },
+                        "expired": {
+                            "domain": "demo_com",
+                            "value": "old",
+                            "timestamp": (now - timedelta(hours=9)).isoformat(),
+                            "ttl_seconds": 28800,
+                        },
+                        "other_domain": {
+                            "domain": "other_com",
+                            "value": "keep",
+                            "timestamp": now.isoformat(),
+                            "ttl_seconds": 28800,
+                        },
                     }
                 }
             }
@@ -325,9 +316,11 @@ def test_prune_expired_cookies_removes_stale_entries():
     }
     config = CookieConfig(config_data)
     config.prune_expired_cookies("carol", "stage", "demo_com")
-    cookies = config_data["users"]["carol"]["stage"]["demo_com"]["cookies"]
-    assert len(cookies) == 1
-    assert cookies[0]["name"] == "session"
+    cookies = config_data["users"]["carol"]["stage"]["cookies"]
+    # Expired cookies for demo_com should be removed, other domains should remain
+    assert "session" in cookies
+    assert "expired" not in cookies
+    assert "other_domain" in cookies
 
 
 def test_read_cookies_from_browser():
@@ -363,11 +356,11 @@ def test_write_cookies_to_browser():
     """Test injecting cookies into Selenium driver."""
     mock_driver = MagicMock()
     cookies = [
-        {"name": "session", "value": "abc123"},
-        {"name": "token", "value": "xyz789"},
+        {"name": "session", "value": "abc123", "domain": "example.com"},
+        {"name": "token", "value": "xyz789", "domain": "example.com"},
     ]
 
-    write_cookies_to_browser(mock_driver, cookies, "example.com")
+    write_cookies_to_browser(mock_driver, cookies)
 
     assert mock_driver.add_cookie.call_count == 2
     mock_driver.add_cookie.assert_any_call({"name": "session", "value": "abc123"})
@@ -378,7 +371,7 @@ def test_write_cookies_to_browser_empty():
     """Test writing empty cookie list (no-op)."""
     mock_driver = MagicMock()
 
-    write_cookies_to_browser(mock_driver, [], "example.com")
+    write_cookies_to_browser(mock_driver, [])
 
     mock_driver.add_cookie.assert_not_called()
 
@@ -389,15 +382,14 @@ def test_get_applicable_rules():
         "users": {
             "alice": {
                 "prod": {
-                    "example_com": {
-                        "cookies": [
-                            {
-                                "name": "sessionid",
-                                "variants": {"chrome": "sid_chrome"},
-                            },
-                            {"name": "auth"},
-                        ],
-                        "ttl_seconds": 1000,
+                    "cookies": {
+                        "sessionid": {
+                            "domain": "example_com",
+                            "variants": {"chrome": "sid_chrome"},
+                        },
+                        "auth": {
+                            "domain": "example_com",
+                        },
                     }
                 }
             }
@@ -430,15 +422,13 @@ def test_inject_and_verify_cookies():
         "users": {
             "alice": {
                 "prod": {
-                    "example_com": {
-                        "cookies": [
-                            {
-                                "name": "sessionid",
-                                "value": "cached_session",
-                                "timestamp": now.isoformat(),
-                            }
-                        ],
-                        "ttl_seconds": 28800,
+                    "cookies": {
+                        "sessionid": {
+                            "domain": "example_com",
+                            "value": "cached_session",
+                            "timestamp": now.isoformat(),
+                            "ttl_seconds": 28800,
+                        }
                     }
                 }
             }
@@ -470,15 +460,13 @@ def test_inject_and_verify_cookies_expired():
         "users": {
             "alice": {
                 "prod": {
-                    "example_com": {
-                        "cookies": [
-                            {
-                                "name": "sessionid",
-                                "value": "expired_session",
-                                "timestamp": expired_time.isoformat(),
-                            }
-                        ],
-                        "ttl_seconds": 28800,
+                    "cookies": {
+                        "sessionid": {
+                            "domain": "example_com",
+                            "value": "expired_session",
+                            "timestamp": expired_time.isoformat(),
+                            "ttl_seconds": 28800,
+                        }
                     }
                 }
             }
@@ -489,9 +477,11 @@ def test_inject_and_verify_cookies_expired():
     mock_launcher = MagicMock()
     mock_driver = MagicMock()
     mock_launcher.driver = mock_driver
+    mock_driver.get_cookies.return_value = []
 
+    # With expired cookies, should not attempt to add cookies but should
+    # read from browser
     inject_and_verify_cookies(mock_launcher, "example_com", "alice", "prod", config)
 
-    # With expired cookies, should not attempt to add cookies
-    # Verify that logger handling worked (either info or warning)
-    assert mock_launcher.logger.info.called or mock_launcher.logger.warning.called
+    # Verify get_cookies was called (reading from browser always happens)
+    mock_driver.get_cookies.assert_called()
