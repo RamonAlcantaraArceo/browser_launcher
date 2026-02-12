@@ -6,8 +6,11 @@ from time import sleep
 
 from selenium import webdriver
 from selenium.common.exceptions import InvalidSessionIdException, NoSuchWindowException
-
+import logging 
 # ruff: noqa: E501
+
+
+logger = logging.getLogger(__name__)
 
 
 class IDGenerator:
@@ -117,7 +120,7 @@ def _capture_screenshot(  # noqa: C901
         )
 
         if metrics is None:
-            print("Falling back to normal screenshot")
+            logger.warning("Falling back to normal screenshot")
             safe_window()
             return
 
@@ -144,9 +147,9 @@ def _capture_screenshot(  # noqa: C901
         try:
             window()
         except InvalidSessionIdException:
-            print("InvalidSessionIdException caught in safe_window")
+            logger.error("InvalidSessionIdException caught in safe_window")
         except Exception as e:
-            print(f"Unexpected {type(e)} caught in safe_window")
+            logger.error(f"Unexpected {type(e)} caught in safe_window")
 
     try:
         if isinstance(driver, webdriver.Chrome) or isinstance(driver, webdriver.Edge):
@@ -155,21 +158,23 @@ def _capture_screenshot(  # noqa: C901
             driver.get_full_page_screenshot_as_file(str(screenshot_path))
         else:
             driver.save_screenshot(str(screenshot_path))
-    except InvalidSessionIdException:
-        # typer.echo(
-        #     "session has gone bad, you need to relaunch to be able"
-        #     f" to capture screenshot {type(e)}"
-        # )
+
+        logger.info(f"Captured {screenshot_path}")
+    except InvalidSessionIdException as e:
+        logger.error(
+            "session has gone bad, you need to relaunch to be able"
+            f" to capture screenshot {type(e)}"
+        )
         raise
-    except NoSuchWindowException:
-        # typer.echo(
-        #     "session has gone bad, you need to relaunch to be able"
-        #     f"to capture screenshot {type(e)}"
-        # )
+    except NoSuchWindowException as e:
+        logger.error(
+            "session has gone bad, you need to relaunch to be able"
+            f"to capture screenshot {type(e)}"
+        )
         raise
     except Exception as e:
-        # typer.echo(
-        #     "session has gone bad, you need to relaunch to be able"
-        #     f"to capture screenshot {type(e)} {e!r}"
-        # )
+        logger.error(
+            "session has gone bad, you need to relaunch to be able"
+            f"to capture screenshot {type(e)} {e!r}"
+        )
         raise e

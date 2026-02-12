@@ -228,7 +228,7 @@ class TestCaptureScreenshot:
         assert mock_sleep.call_args_list[0][0][0] == 0.5
 
     def test_capture_screenshot_chrome_fallback_on_metrics_none(
-        self, tmp_path: Path
+        self, tmp_path: Path, caplog
     ) -> None:
         """
         Test Chrome fallback to normal screenshot when metrics evaluation
@@ -243,12 +243,11 @@ class TestCaptureScreenshot:
             {"result": {}},  # metrics returns empty (None case)
         ]
 
-        with mock.patch("builtins.print") as mock_print:
-            with mock.patch("browser_launcher.screenshot.sleep"):
-                _capture_screenshot(screenshot_path, mock_driver)
+        with mock.patch("browser_launcher.screenshot.sleep"):
+            _capture_screenshot(screenshot_path, mock_driver)
 
-        # Verify fallback message was printed
-        mock_print.assert_called_with("Falling back to normal screenshot")
+        # Verify fallback message was logged
+        assert "Falling back to normal screenshot" in caplog.text
         # Verify save_screenshot was called as fallback
         mock_driver.save_screenshot.assert_called()
 
@@ -438,9 +437,9 @@ class TestCaptureScreenshot:
         assert mock_driver.execute_cdp_cmd.called
 
     def test_capture_screenshot_safe_window_prints_on_invalid_session(
-        self, tmp_path: Path
+        self, tmp_path: Path, caplog
     ) -> None:
-        """Test that InvalidSessionIdException in safe_window is caught and printed."""
+        """Test that InvalidSessionIdException in safe_window is caught and logged."""
         screenshot_path = tmp_path / "screenshot.png"
         mock_driver = mock.Mock(spec=webdriver.Chrome)
 
@@ -452,18 +451,17 @@ class TestCaptureScreenshot:
             {"result": {}},  # metrics returns empty - triggers fallback
         ]
 
-        with mock.patch("builtins.print") as mock_print:
-            with mock.patch("browser_launcher.screenshot.sleep"):
-                _capture_screenshot(screenshot_path, mock_driver)
+        with mock.patch("browser_launcher.screenshot.sleep"):
+            _capture_screenshot(screenshot_path, mock_driver)
 
-        # Verify fallback message and exception message were printed
-        print_calls = [str(call) for call in mock_print.call_args_list]
-        assert any("Falling back" in str(call) for call in print_calls)
+        # Verify fallback message and exception message were logged
+        assert "Falling back" in caplog.text
+        assert "InvalidSessionIdException" in caplog.text
 
     def test_capture_screenshot_safe_window_prints_on_generic_exception(
-        self, tmp_path: Path
+        self, tmp_path: Path, caplog
     ) -> None:
-        """Test that generic exceptions in safe_window are caught and printed."""
+        """Test that generic exceptions in safe_window are caught and logged."""
         screenshot_path = tmp_path / "screenshot.png"
         mock_driver = mock.Mock(spec=webdriver.Chrome)
 
@@ -475,13 +473,11 @@ class TestCaptureScreenshot:
             {"result": {}},  # metrics returns empty - triggers fallback
         ]
 
-        with mock.patch("builtins.print") as mock_print:
-            with mock.patch("browser_launcher.screenshot.sleep"):
-                _capture_screenshot(screenshot_path, mock_driver)
+        with mock.patch("browser_launcher.screenshot.sleep"):
+            _capture_screenshot(screenshot_path, mock_driver)
 
-        # Verify unexpected exception message was printed
-        print_calls = [str(call) for call in mock_print.call_args_list]
-        assert any("Unexpected" in str(call) for call in print_calls)
+        # Verify unexpected exception message was logged
+        assert "Unexpected" in caplog.text
 
     def test_capture_screenshot_window_function_called_on_safari(
         self, tmp_path: Path
