@@ -158,7 +158,7 @@ def test_launch_with_verbose_and_debug(monkeypatch):
     mock_bl.driver.close.assert_called()
     # Accept the actual log message format
     mock_logger.info.assert_any_call(
-        "Starting browser launch - [launch] headless=False | verbose=True | debug=True"
+        "Starting browser launch - [launch] headless=False | user=default | env=prod | verbose=True | debug=True"
     )
 
 

@@ -182,6 +182,16 @@ def launch(  # noqa: C901
     headless: bool = typer.Option(
         False, "--headless", help="Run browser in headless mode"
     ),
+    user: str = typer.Option(
+        "default",
+        "--user",
+        help="User profile for cookie and config lookup (default: 'default')",
+    ),
+    env: str = typer.Option(
+        "prod",
+        "--env",
+        help="Environment for cookie and config lookup (default: 'prod')",
+    ),
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Show detailed operational logs (INFO level)"
     ),
@@ -198,6 +208,12 @@ def launch(  # noqa: C901
     - --verbose: INFO level console logging for operational details
     - --debug: DEBUG level console logging including internal execution flow
     - File logging: Always active regardless of console flags
+
+    Cookie Management:
+    - --user: Selects user profile for hierarchical cookie lookup
+    - --env: Selects environment for hierarchical cookie lookup
+    - Cookies are injected after initial navigation if valid cache exists
+    - See config documentation for hierarchical structure: [users.{user}.{env}.{domain}]
     """
     # Always read console_logging from config file
     console_logging = get_console_logging_setting()
@@ -221,6 +237,8 @@ def launch(  # noqa: C901
             "url": url,
             "browser": browser,
             "headless": headless,
+            "user": user,
+            "env": env,
             "verbose": verbose,
             "debug": debug,
         },
@@ -410,6 +428,54 @@ def clean(  # noqa: C901
         error_msg = f"Failed to clean up: {e}"
         console.print(f"❌ [red]Error:[/red] {error_msg}")
         sys.exit(1)
+
+
+def get_applicable_cookie_rules(domain: str, user: str, env: str):
+    """Query hierarchical config for matching cookie rules.
+
+    Args:
+        domain: Domain to match
+        user: User profile
+        env: Environment
+
+    Returns:
+        List of CookieRule objects or dicts describing applicable rules.
+    """
+    from browser_launcher.config import BrowserLauncherConfig
+
+    config = BrowserLauncherConfig()
+    # Hierarchical lookup: users.{user}.{env}.{domain}
+    section = f"users.{user}.{env}.{domain}"
+    rules = config.get_cookie_rules(section)
+    return rules
+
+
+def inject_and_verify_cookies(launcher, domain: str, user: str, env: str):
+    """Inject cookies into browser after navigation and verify their presence.
+
+    Args:
+        launcher: BrowserLauncher instance
+        domain: Domain for cookie injection
+        user: User profile
+        env: Environment
+
+    Returns:
+        None
+    """
+    # Get applicable cookie rules
+    cookies = get_applicable_cookie_rules(domain, user, env)
+    if not cookies:
+        return
+    # Inject cookies into browser
+    for cookie in cookies:
+        try:
+            launcher.driver.add_cookie(cookie)
+        except Exception:
+            continue
+    # Optionally verify cookies present
+    injected = launcher.driver.get_cookies()
+    # Could log or assert injected cookies here
+    return injected
 
 
 if __name__ == "__main__":

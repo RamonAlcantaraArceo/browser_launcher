@@ -121,7 +121,9 @@ class CookieConfig:
                 )
         return entries
 
-    def load_cookie_cache(self, user: str, env: str, domain: str) -> Dict[str, CacheEntry]:
+    def load_cookie_cache(
+        self, user: str, env: str, domain: str
+    ) -> Dict[str, CacheEntry]:
         """Load the cookie cache for a given user, environment, and domain.
 
         Args:
@@ -148,7 +150,9 @@ class CookieConfig:
                 )
         return cache
 
-    def save_cookie_cache(self, user: str, env: str, domain: str, cache: Dict[str, CacheEntry]) -> None:
+    def save_cookie_cache(
+        self, user: str, env: str, domain: str, cache: Dict[str, CacheEntry]
+    ) -> None:
         """Save the cookie cache for a given user, environment, and domain.
 
         Args:
@@ -168,16 +172,26 @@ class CookieConfig:
         )
         cookies_list = []
         for name, entry in cache.items():
-            cookies_list.append({
-                "name": name,
-                "value": entry.value,
-                "timestamp": entry.timestamp.isoformat(),
-            })
+            cookies_list.append(
+                {
+                    "name": name,
+                    "value": entry.value,
+                    "timestamp": entry.timestamp.isoformat(),
+                }
+            )
         section["cookies"] = cookies_list
 
-
-    def update_cookie_cache(self, user: str, env: str, domain: str, name: str, value: str, ttl_seconds: Optional[int] = None) -> None:
-        """Update a single cookie cache entry for a given user, environment, domain, and cookie name.
+    def update_cookie_cache(
+        self,
+        user: str,
+        env: str,
+        domain: str,
+        name: str,
+        value: str,
+        ttl_seconds: Optional[int] = None,
+    ) -> None:
+        """Update a single cookie cache entry for a given user, environment,
+        domain, and cookie name.
 
         Args:
             user (str): The user key.
@@ -207,14 +221,15 @@ class CookieConfig:
                 found = True
                 break
         if not found:
-            cookies.append({
-                "name": name,
-                "value": value,
-                "timestamp": now.isoformat(),
-            })
+            cookies.append(
+                {
+                    "name": name,
+                    "value": value,
+                    "timestamp": now.isoformat(),
+                }
+            )
         if ttl_seconds is not None:
             section["ttl_seconds"] = ttl_seconds
-
 
     def clear_cookie_cache(self, user: str, env: str, domain: str) -> None:
         """Clear all cookie cache entries for a given user, environment, and domain.
@@ -235,9 +250,11 @@ class CookieConfig:
         )
         section["cookies"] = []
 
-
-    def get_valid_cookie_cache(self, user: str, env: str, domain: str) -> Dict[str, CacheEntry]:
-        """Get only valid (non-expired) cookie cache entries for a given user, environment, and domain.
+    def get_valid_cookie_cache(
+        self, user: str, env: str, domain: str
+    ) -> Dict[str, CacheEntry]:
+        """Get only valid (non-expired) cookie cache entries for a given user,
+        environment, and domain.
 
         Args:
             user (str): The user key.
@@ -255,8 +272,11 @@ class CookieConfig:
                 valid_cache[name] = entry
         return valid_cache
 
-    def load_cookie_cache_from_config(self, user: str, env: str, domain: str) -> Dict[str, CacheEntry]:
-        """Parse persisted cookies from config for a given user, environment, and domain.
+    def load_cookie_cache_from_config(
+        self, user: str, env: str, domain: str
+    ) -> Dict[str, CacheEntry]:
+        """Parse persisted cookies from config for a given user, environment,
+        and domain.
 
         Args:
             user (str): The user key.
@@ -283,8 +303,11 @@ class CookieConfig:
                 )
         return cache
 
-    def save_cookies_to_cache(self, user: str, env: str, domain: str, cookies: Dict[str, CacheEntry]) -> None:
-        """Persist cookies to config for a given user, environment, and domain with current timestamp.
+    def save_cookies_to_cache(
+        self, user: str, env: str, domain: str, cookies: Dict[str, CacheEntry]
+    ) -> None:
+        """Persist cookies to config for a given user, environment, and domain
+        with current timestamp.
 
         Args:
             user (str): The user key.
@@ -303,15 +326,18 @@ class CookieConfig:
         )
         cookies_list = []
         for name, entry in cookies.items():
-            cookies_list.append({
-                "name": name,
-                "value": entry.value,
-                "timestamp": entry.timestamp.isoformat(),
-            })
+            cookies_list.append(
+                {
+                    "name": name,
+                    "value": entry.value,
+                    "timestamp": entry.timestamp.isoformat(),
+                }
+            )
         section["cookies"] = cookies_list
 
     def prune_expired_cookies(self, user: str, env: str, domain: str) -> None:
-        """Remove stale (expired) cookie entries from config for a given user, environment, and domain.
+        """Remove stale (expired) cookie entries from config for a given user,
+        environment, and domain.
 
         Args:
             user (str): The user key.
@@ -342,10 +368,11 @@ class CookieConfig:
                     ttl_seconds=ttl,
                 )
                 if entry.is_valid(now=now):
-                    valid_cookies.append({
-                        "name": cookie["name"],
-                        "value": cookie["value"],
-                        "timestamp": cookie["timestamp"],
-                    })
+                    valid_cookies.append(
+                        {
+                            "name": cookie["name"],
+                            "value": cookie["value"],
+                            "timestamp": cookie["timestamp"],
+                        }
+                    )
         section["cookies"] = valid_cookies
-

@@ -9,6 +9,24 @@ from browser_launcher.browsers.base import BrowserConfig
 
 
 class BrowserLauncherConfig:
+    def get_cookie_rules(self, section: str):
+        """Retrieve cookie rules for a given hierarchical section.
+
+        Args:
+            section: Hierarchical config section (e.g. users.{user}.{env}.{domain})
+
+        Returns:
+            List of cookie rule dicts or objects, or empty list if not found.
+        """
+        keys = section.split(".")
+        data = self.config_data
+        for key in keys:
+            if key in data:
+                data = data[key]
+            else:
+                return []
+        return data.get("cookies", [])
+
     def get_console_logging(self) -> bool:
         """Return the console_logging setting from config,
         defaulting to False if not present."""

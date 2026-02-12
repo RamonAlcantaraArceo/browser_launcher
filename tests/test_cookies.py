@@ -61,6 +61,7 @@ def test_cookie_config_get_rules_and_cache_entries():
     assert entries[0].ttl_seconds == 1000
     assert entries[0].is_valid(now=now)
 
+
 def test_load_cookie_cache_returns_dict_of_cache_entries():
     now = datetime.now(timezone.utc).replace(microsecond=0)
     config_data = {
@@ -97,6 +98,7 @@ def test_load_cookie_cache_returns_dict_of_cache_entries():
     assert "expired" in cache
     assert cache["expired"].value == "old"
 
+
 def test_save_cookie_cache_updates_config_data():
     now = datetime.now(timezone.utc).replace(microsecond=0)
     config_data = {
@@ -126,6 +128,7 @@ def test_save_cookie_cache_updates_config_data():
         assert c["value"] in ["xyz", "abc"]
         assert c["timestamp"] == now.isoformat()
 
+
 def test_update_cookie_cache_adds_and_modifies_entry():
     now = datetime.now(timezone.utc).replace(microsecond=0)
     config_data = {
@@ -148,7 +151,9 @@ def test_update_cookie_cache_adds_and_modifies_entry():
     }
     config = CookieConfig(config_data)
     # Update existing
-    config.update_cookie_cache("bob", "dev", "test_com", "token", "newval", ttl_seconds=1000)
+    config.update_cookie_cache(
+        "bob", "dev", "test_com", "token", "newval", ttl_seconds=1000
+    )
     cookies = config_data["users"]["bob"]["dev"]["test_com"]["cookies"]
     token_cookie = next(c for c in cookies if c["name"] == "token")
     assert token_cookie["value"] == "newval"
@@ -158,6 +163,7 @@ def test_update_cookie_cache_adds_and_modifies_entry():
     session_cookie = next(c for c in cookies if c["name"] == "session")
     assert session_cookie["value"] == "abc"
     assert session_cookie["timestamp"]
+
 
 def test_clear_cookie_cache_removes_all_entries():
     now = datetime.now(timezone.utc).replace(microsecond=0)
@@ -183,6 +189,7 @@ def test_clear_cookie_cache_removes_all_entries():
     config.clear_cookie_cache("bob", "dev", "test_com")
     cookies = config_data["users"]["bob"]["dev"]["test_com"]["cookies"]
     assert cookies == []
+
 
 def test_get_valid_cookie_cache_filters_expired_entries():
     now = datetime.now(timezone.utc).replace(microsecond=0)
@@ -214,6 +221,7 @@ def test_get_valid_cookie_cache_filters_expired_entries():
     assert "token" in valid_cache
     assert "expired" not in valid_cache
     assert valid_cache["token"].is_valid(now=now)
+
 
 def test_load_cookie_cache_from_config_returns_dict_of_cache_entries():
     now = datetime.now(timezone.utc).replace(microsecond=0)
@@ -250,6 +258,7 @@ def test_load_cookie_cache_from_config_returns_dict_of_cache_entries():
     assert "expired" in cache
     assert cache["expired"].value == "old"
 
+
 def test_save_cookies_to_cache_persists_entries():
     now = datetime.now(timezone.utc).replace(microsecond=0)
     config_data = {
@@ -278,6 +287,7 @@ def test_save_cookies_to_cache_persists_entries():
     for c in persisted:
         assert c["value"] in ["val", "tok"]
         assert c["timestamp"] == now.isoformat()
+
 
 def test_prune_expired_cookies_removes_stale_entries():
     now = datetime.now(timezone.utc).replace(microsecond=0)
