@@ -16,6 +16,7 @@ from browser_launcher.logger import (
     get_current_logger,
     initialize_logging,
 )
+from browser_launcher.screenshot import IDGenerator, _capture_screenshot
 
 app = typer.Typer(help="Browser launcher CLI tool")
 console = Console()
@@ -272,9 +273,15 @@ def launch(  # noqa: C901
         logger.error(f"Error launching browser: {e}")
         sys.exit(1)
 
+    # There are defaults already
+    # app_name = "Demo"
+    # screenshot_path = str(Path("~/Downloads").expanduser())
+    gen = IDGenerator()
+
     # Wait for it to close
     try:
         console.print("Press Ctrl+D (or Ctrl+Z on Windows) to exit.")
+        console.print("Press 'Enter' to capture a screenshot.")
         while True:
             if bl.driver.session_id is None:
                 console.print(
@@ -284,6 +291,22 @@ def launch(  # noqa: C901
             char = sys.stdin.read(1)
             if not char:
                 break
+            elif char.lower() == "\n":
+                try:
+                    screenshot_name = gen.generate()
+                    _capture_screenshot(
+                        screenshot_name,
+                        driver=bl.driver,
+                        delay=0.5,
+                    )
+                    typer.echo(f"Captured: {screenshot_name}")
+                except Exception as e:
+                    typer.echo(
+                        "session has gone bad, you need to relaunch to be able"
+                        f"to capture screenshot {type(e)} {e!r}"
+                    )
+                    raise e
+
     except EOFError:
         console.print("\nExiting...")
     finally:

@@ -168,7 +168,7 @@ def initialize_logging(
     global _logger
     # Determine log level
     if log_level:
-        pass
+        pass  # pragma nocover
     elif debug:
         log_level = "DEBUG"
     elif verbose:

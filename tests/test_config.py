@@ -58,6 +58,14 @@ def test_get_console_logging_defaults_to_false(tmp_path):
     assert config.get_console_logging() is False
 
 
+def test_get_logging_level_defaults_to_warning(tmp_path):
+    config_dict = dict(default_config)
+    config_dict["logging"] = {"default_log_level": "WARNING"}
+    config_path = write_config(tmp_path, config_dict)
+    config = BrowserLauncherConfig(config_path)
+    assert config.get_logging_level() == "WARNING"
+
+
 def test_missing_config_file_raises():
     with pytest.raises(FileNotFoundError):
         BrowserLauncherConfig(Path("/nonexistent/path/config.toml"))
