@@ -19,6 +19,7 @@ rich = "^14.2.0"
 selenium = "^4.40.0"
 toml = "^0.10.2"
 types-toml = "^0.10.8.20240310"
+tomli-w = "^1.2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0"

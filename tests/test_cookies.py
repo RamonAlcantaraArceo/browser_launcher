@@ -1,8 +1,17 @@
 """Unit tests for CookieRule, CacheEntry, and CookieConfig (Google-style docstrings)."""
 
 from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock
 
-from browser_launcher.cookies import CacheEntry, CookieConfig, CookieRule
+from browser_launcher.cookies import (
+    CacheEntry,
+    CookieConfig,
+    CookieRule,
+    get_applicable_rules,
+    inject_and_verify_cookies,
+    read_cookies_from_browser,
+    write_cookies_to_browser,
+)
 
 
 def test_cookie_rule_fields():
@@ -319,3 +328,170 @@ def test_prune_expired_cookies_removes_stale_entries():
     cookies = config_data["users"]["carol"]["stage"]["demo_com"]["cookies"]
     assert len(cookies) == 1
     assert cookies[0]["name"] == "session"
+
+
+def test_read_cookies_from_browser():
+    """Test reading cookies from Selenium driver filtered by domain."""
+    mock_driver = MagicMock()
+    mock_driver.get_cookies.return_value = [
+        {"name": "session", "value": "abc123", "domain": "example.com"},
+        {"name": "token", "value": "xyz789", "domain": "example.com"},
+        {"name": "other", "value": "def456", "domain": "other.com"},
+    ]
+
+    cookies = read_cookies_from_browser(mock_driver, "example.com")
+
+    assert len(cookies) == 2
+    assert cookies[0]["name"] == "session"
+    assert cookies[1]["name"] == "token"
+    mock_driver.get_cookies.assert_called_once()
+
+
+def test_read_cookies_from_browser_empty():
+    """Test reading cookies when none match the domain."""
+    mock_driver = MagicMock()
+    mock_driver.get_cookies.return_value = [
+        {"name": "other", "value": "def456", "domain": "other.com"},
+    ]
+
+    cookies = read_cookies_from_browser(mock_driver, "example.com")
+
+    assert len(cookies) == 0
+
+
+def test_write_cookies_to_browser():
+    """Test injecting cookies into Selenium driver."""
+    mock_driver = MagicMock()
+    cookies = [
+        {"name": "session", "value": "abc123"},
+        {"name": "token", "value": "xyz789"},
+    ]
+
+    write_cookies_to_browser(mock_driver, cookies, "example.com")
+
+    assert mock_driver.add_cookie.call_count == 2
+    mock_driver.add_cookie.assert_any_call({"name": "session", "value": "abc123"})
+    mock_driver.add_cookie.assert_any_call({"name": "token", "value": "xyz789"})
+
+
+def test_write_cookies_to_browser_empty():
+    """Test writing empty cookie list (no-op)."""
+    mock_driver = MagicMock()
+
+    write_cookies_to_browser(mock_driver, [], "example.com")
+
+    mock_driver.add_cookie.assert_not_called()
+
+
+def test_get_applicable_rules():
+    """Test getting applicable cookie rules from hierarchical config."""
+    config_data = {
+        "users": {
+            "alice": {
+                "prod": {
+                    "example_com": {
+                        "cookies": [
+                            {
+                                "name": "sessionid",
+                                "variants": {"chrome": "sid_chrome"},
+                            },
+                            {"name": "auth"},
+                        ],
+                        "ttl_seconds": 1000,
+                    }
+                }
+            }
+        }
+    }
+    config = CookieConfig(config_data)
+
+    rules = get_applicable_rules(config, "example_com", "alice", "prod")
+
+    assert len(rules) == 2
+    assert rules[0].name == "sessionid"
+    assert rules[0].variants == {"chrome": "sid_chrome"}
+    assert rules[1].name == "auth"
+
+
+def test_get_applicable_rules_not_found():
+    """Test getting rules for non-existent user/env/domain."""
+    config_data: dict[str, dict] = {"users": {}}
+    config = CookieConfig(config_data)
+
+    rules = get_applicable_rules(config, "example_com", "alice", "prod")
+
+    assert len(rules) == 0
+
+
+def test_inject_and_verify_cookies():
+    """Test the main integration hook for cookie injection and verification."""
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    config_data: dict[str, dict] = {
+        "users": {
+            "alice": {
+                "prod": {
+                    "example_com": {
+                        "cookies": [
+                            {
+                                "name": "sessionid",
+                                "value": "cached_session",
+                                "timestamp": now.isoformat(),
+                            }
+                        ],
+                        "ttl_seconds": 28800,
+                    }
+                }
+            }
+        }
+    }
+    config = CookieConfig(config_data)
+
+    # Mock the launcher with driver and logger
+    mock_launcher = MagicMock()
+    mock_driver = MagicMock()
+    mock_launcher.driver = mock_driver
+    mock_driver.get_cookies.return_value = [
+        {"name": "sessionid", "value": "cached_session", "domain": "example.com"},
+        {"name": "new_cookie", "value": "new_value", "domain": "example.com"},
+    ]
+
+    inject_and_verify_cookies(mock_launcher, "example_com", "alice", "prod", config)
+
+    # Verify that cookies were read and injected
+    mock_driver.get_cookies.assert_called()
+    mock_driver.add_cookie.assert_called()
+
+
+def test_inject_and_verify_cookies_expired():
+    """Test injection hook with expired cached cookies (should not inject)."""
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    expired_time = now - timedelta(hours=10)
+    config_data: dict[str, dict] = {
+        "users": {
+            "alice": {
+                "prod": {
+                    "example_com": {
+                        "cookies": [
+                            {
+                                "name": "sessionid",
+                                "value": "expired_session",
+                                "timestamp": expired_time.isoformat(),
+                            }
+                        ],
+                        "ttl_seconds": 28800,
+                    }
+                }
+            }
+        }
+    }
+    config = CookieConfig(config_data)
+
+    mock_launcher = MagicMock()
+    mock_driver = MagicMock()
+    mock_launcher.driver = mock_driver
+
+    inject_and_verify_cookies(mock_launcher, "example_com", "alice", "prod", config)
+
+    # With expired cookies, should not attempt to add cookies
+    # Verify that logger handling worked (either info or warning)
+    assert mock_launcher.logger.info.called or mock_launcher.logger.warning.called

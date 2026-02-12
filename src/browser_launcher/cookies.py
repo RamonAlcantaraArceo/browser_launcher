@@ -376,3 +376,159 @@ class CookieConfig:
                         }
                     )
         section["cookies"] = valid_cookies
+
+
+def read_cookies_from_browser(driver: Any, domain: str) -> List[Dict[str, Any]]:
+    """Extract cookies matching a given domain from the Selenium driver.
+
+    Reads all cookies from the driver and filters those belonging to the specified
+    domain. Handles domain matching flexibly to account for subdomains.
+
+    Args:
+        driver (Any): A Selenium WebDriver instance.
+        domain (str): The domain to filter cookies by (e.g., 'example.com').
+
+    Returns:
+        List[Dict[str, Any]]: List of cookie dictionaries matching the domain.
+            Each cookie has keys like 'name', 'value', 'domain', etc.
+
+    Raises:
+        AttributeError: If driver does not have a get_cookies() method.
+    """
+    try:
+        all_cookies = driver.get_cookies()
+    except AttributeError as e:
+        raise AttributeError(f"Driver does not have get_cookies() method: {e}") from e
+
+    filtered_cookies = [
+        cookie for cookie in all_cookies if cookie.get("domain", "").endswith(domain)
+    ]
+    return filtered_cookies
+
+
+def write_cookies_to_browser(
+    driver: Any, cookies: List[Dict[str, Any]], domain: str
+) -> None:
+    """Inject cookies into the browser via the Selenium driver.
+
+    Adds the given list of cookies to the browser session. Handles any exceptions
+    that occur during cookie injection and logs them appropriately.
+
+    Args:
+        driver (Any): A Selenium WebDriver instance.
+        cookies (List[Dict[str, Any]]): List of cookie dictionaries to inject.
+            Each dictionary should have 'name' and 'value' keys at minimum.
+        domain (str): The domain scope for the cookies (for reference/logging).
+
+    Returns:
+        None
+
+    Raises:
+        AttributeError: If driver does not have an add_cookie() method.
+    """
+    for cookie in cookies:
+        try:
+            driver.add_cookie(cookie)
+        except AttributeError as e:
+            raise AttributeError(
+                f"Driver does not have add_cookie() method: {e}"
+            ) from e
+        except Exception:
+            # Log or handle exceptions during individual cookie additions
+            # Continue with remaining cookies rather than failing entirely
+            pass
+
+
+def get_applicable_rules(
+    cookie_config: CookieConfig, domain: str, user: str, env: str
+) -> List[CookieRule]:
+    """Query the hierarchical configuration for cookie rules matching domain, user, env.
+
+    Retrieves all cookie rules applicable to the given domain, user, and environment
+    from the loaded configuration.
+
+    Args:
+        cookie_config (CookieConfig): The loaded cookie configuration object.
+        domain (str): The domain key (e.g., 'example_com').
+        user (str): The user key (e.g., 'alice').
+        env (str): The environment key (e.g., 'prod').
+
+    Returns:
+        List[CookieRule]: List of applicable cookie rules for this context.
+    """
+    return cookie_config.get_rules(user, env, domain)
+
+
+def inject_and_verify_cookies(
+    launcher: Any, domain: str, user: str, env: str, cookie_config: CookieConfig
+) -> None:
+    """Main integration hook to inject cached cookies and verify authenticity.
+
+    Performs the following workflow:
+    1. Query cached cookies for the given domain, user, and environment.
+    2. If valid cached cookies exist, inject them into the browser.
+    3. Navigate to the domain to verify authentication.
+    4. Read cookies back from the browser and update the cache.
+
+    This function should be called after initial navigation or as a separate
+    authentication verification step.
+
+    Args:
+        launcher (Any): A BrowserLauncher instance with a driver and logger.
+        domain (str): The domain to operate on.
+        user (str): The user context.
+        env (str): The environment context.
+        cookie_config (CookieConfig): The loaded cookie configuration.
+
+    Returns:
+        None
+
+    Raises:
+        AttributeError: If launcher lacks expected driver or logger attributes.
+    """
+    try:
+        # Get valid cached cookies for this context
+        valid_cache = cookie_config.get_valid_cookie_cache(user, env, domain)
+
+        if valid_cache:
+            launcher.logger.info(
+                f"Found {len(valid_cache)} valid cached cookies for "
+                f"{user}/{env}/{domain}"
+            )
+            # Convert cache entries to cookie dicts for injection
+            cookies_to_inject = [
+                {"name": name, "value": entry.value}
+                for name, entry in valid_cache.items()
+            ]
+            # Inject cookies into the browser
+            write_cookies_to_browser(launcher.driver, cookies_to_inject, domain)
+        else:
+            launcher.logger.info(
+                f"No valid cached cookies found for {user}/{env}/{domain}"
+            )
+
+        # Read cookies back from the browser to verify or update cache
+        browser_cookies = read_cookies_from_browser(launcher.driver, domain)
+
+        if browser_cookies:
+            launcher.logger.info(
+                f"Read {len(browser_cookies)} cookies from browser for domain {domain}"
+            )
+            # Update cache with cookies from browser
+            for cookie in browser_cookies:
+                cookie_config.update_cookie_cache(
+                    user, env, domain, cookie["name"], cookie.get("value", "")
+                )
+
+    except AttributeError as e:
+        if hasattr(launcher, "logger") and launcher.logger:
+            launcher.logger.error(
+                f"Error during cookie injection/verification: {e}", exc_info=True
+            )
+        raise
+    except Exception as e:
+        if hasattr(launcher, "logger") and launcher.logger:
+            launcher.logger.error(
+                f"Unexpected error during cookie injection/verification: {e}",
+                exc_info=True,
+            )

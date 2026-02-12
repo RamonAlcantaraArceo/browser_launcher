@@ -4,6 +4,7 @@ import sys
 from importlib import resources
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 import typer
 from rich.console import Console
@@ -11,6 +12,11 @@ from rich.panel import Panel
 
 from browser_launcher.browsers.factory import BrowserFactory
 from browser_launcher.config import BrowserLauncherConfig
+from browser_launcher.cookies import (
+    CookieConfig,
+    inject_and_verify_cookies,
+    read_cookies_from_browser,
+)
 from browser_launcher.logger import (
     get_command_context,
     get_current_logger,
@@ -291,6 +297,32 @@ def launch(  # noqa: C901
         logger.error(f"Error launching browser: {e}")
         sys.exit(1)
 
+    # Extract domain from URL for cookie injection
+    try:
+        parsed_url = urlparse(launch_url)
+        domain = parsed_url.netloc or parsed_url.path.split("/")[0]
+        # Normalize domain to match config key format (replace dots with underscores)
+        # For example: example.com -> example_com
+        domain_key = domain.replace(".", "_").lower()
+
+        # Load cookie config and inject cached cookies if available
+        try:
+            cookie_config_data = config_loader.config_data
+            cookie_config = CookieConfig(cookie_config_data)
+            logger.info(
+                f"Attempting to inject cookies for domain {domain} "
+                f"(user={user}, env={env})"
+            )
+            inject_and_verify_cookies(bl, domain_key, user, env, cookie_config)
+        except Exception as e:
+            logger.warning(
+                f"Failed to inject/verify cookies for {domain}: {e}", exc_info=True
+            )
+            # Continue execution even if cookie injection fails
+    except Exception as e:
+        logger.warning(f"Could not extract domain from URL {launch_url}: {e}")
+        # Continue execution even if domain extraction fails
+
     # There are defaults already
     # app_name = "Demo"
     # screenshot_path = str(Path("~/Downloads").expanduser())
@@ -300,6 +332,7 @@ def launch(  # noqa: C901
     try:
         console.print("Press Ctrl+D (or Ctrl+Z on Windows) to exit.")
         console.print("Press 'Enter' to capture a screenshot.")
+        console.print("Press 's' to save/cache cookies for this session.")
         while True:
             if bl.driver.session_id is None:
                 console.print(
@@ -324,6 +357,50 @@ def launch(  # noqa: C901
                         f"to capture screenshot {type(e)} {e!r}"
                     )
                     raise e
+            elif char.lower() == "s":
+                # Capture and cache cookies from the browser
+                try:
+                    browser_cookies = read_cookies_from_browser(bl.driver, domain)
+                    if browser_cookies:
+                        # Update cache entries for each cookie
+                        for cookie in browser_cookies:
+                            cookie_config.update_cookie_cache(
+                                user,
+                                env,
+                                domain_key,
+                                cookie["name"],
+                                cookie.get("value", ""),
+                            )
+                        # Save config back to file
+                        try:
+                            import tomli_w
+
+                            config_file = (
+                                get_home_directory() / "config.toml"
+                            )
+                            with open(config_file, "wb") as f:
+                                tomli_w.dump(cookie_config.config_data, f)
+                            console.print(
+                                f"✅ Cached {len(browser_cookies)} cookies for "
+                                f"{user}/{env}/{domain}"
+                            )
+                            logger.info(
+                                f"Saved {len(browser_cookies)} cookies "
+                                f"for {user}/{env}/{domain}"
+                            )
+                        except ImportError:
+                            console.print(
+                                "⚠️ tomli-w not available; cookies cached in memory "
+                                "but not persisted to file"
+                            )
+                            logger.warning(
+                                "tomli-w not available for config persistence"
+                            )
+                    else:
+                        console.print(f"⚠️ No cookies found for domain {domain}")
+                except Exception as e:
+                    console.print(f"❌ Error caching cookies: {e}")
+                    logger.error(f"Error caching cookies: {e}", exc_info=True)
 
     except EOFError:
         console.print("\nExiting...")
@@ -428,54 +505,6 @@ def clean(  # noqa: C901
         error_msg = f"Failed to clean up: {e}"
         console.print(f"❌ [red]Error:[/red] {error_msg}")
         sys.exit(1)
-
-
-def get_applicable_cookie_rules(domain: str, user: str, env: str):
-    """Query hierarchical config for matching cookie rules.
-
-    Args:
-        domain: Domain to match
-        user: User profile
-        env: Environment
-
-    Returns:
-        List of CookieRule objects or dicts describing applicable rules.
-    """
-    from browser_launcher.config import BrowserLauncherConfig
-
-    config = BrowserLauncherConfig()
-    # Hierarchical lookup: users.{user}.{env}.{domain}
-    section = f"users.{user}.{env}.{domain}"
-    rules = config.get_cookie_rules(section)
-    return rules
-
-
-def inject_and_verify_cookies(launcher, domain: str, user: str, env: str):
-    """Inject cookies into browser after navigation and verify their presence.
-
-    Args:
-        launcher: BrowserLauncher instance
-        domain: Domain for cookie injection
-        user: User profile
-        env: Environment
-
-    Returns:
-        None
-    """
-    # Get applicable cookie rules
-    cookies = get_applicable_cookie_rules(domain, user, env)
-    if not cookies:
-        return
-    # Inject cookies into browser
-    for cookie in cookies:
-        try:
-            launcher.driver.add_cookie(cookie)
-        except Exception:
-            continue
-    # Optionally verify cookies present
-    injected = launcher.driver.get_cookies()
-    # Could log or assert injected cookies here
-    return injected
 
 
 if __name__ == "__main__":

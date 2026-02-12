@@ -3,11 +3,8 @@
 import pytest
 from typer.testing import CliRunner
 
-from browser_launcher.cli import (
-    app,
-    get_applicable_cookie_rules,
-    inject_and_verify_cookies,
-)
+from browser_launcher.cli import app
+from browser_launcher.cookies import inject_and_verify_cookies
 
 runner = CliRunner()
 
@@ -15,7 +12,7 @@ runner = CliRunner()
 @pytest.mark.usefixtures("caplog")
 def test_launch_command_with_user_env_args(caplog):
     """Verify CLI accepts and passes user/env arguments."""
-    result = runner.invoke(
+    runner.invoke(
         app,
         [
             "launch",
@@ -42,16 +39,6 @@ def test_launch_command_default_user_env():
     assert result.exit_code == 0 or result.exit_code != 0  # Accept any exit for now
 
 
-def test_get_applicable_cookie_rules_signature():
-    """Ensure get_applicable_cookie_rules function exists and accepts correct args."""
-    try:
-        get_applicable_cookie_rules("example.com", "alice", "staging")
-    except NotImplementedError:
-        pass
-    except Exception:
-        pass
-
-
 def test_inject_and_verify_cookies_signature():
     """Ensure inject_and_verify_cookies function exists and accepts correct args."""
 
@@ -59,7 +46,7 @@ def test_inject_and_verify_cookies_signature():
         pass
 
     try:
-        inject_and_verify_cookies(DummyLauncher(), "example.com", "alice", "staging")
+        inject_and_verify_cookies(DummyLauncher(), "example_com", "alice", "staging")
     except NotImplementedError:
         pass
     except Exception:
