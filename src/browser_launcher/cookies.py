@@ -120,3 +120,138 @@ class CookieConfig:
                     )
                 )
         return entries
+
+    def load_cookie_cache(self, user: str, env: str, domain: str) -> Dict[str, CacheEntry]:
+        """Load the cookie cache for a given user, environment, and domain.
+
+        Args:
+            user (str): The user key.
+            env (str): The environment key.
+            domain (str): The domain key.
+
+        Returns:
+            Dict[str, CacheEntry]: Mapping of cookie name to cache entry.
+        """
+        section = (
+            self.config_data.get("users", {}).get(user, {}).get(env, {}).get(domain, {})
+        )
+        cache: Dict[str, CacheEntry] = {}
+        for cookie in section.get("cookies", []):
+            if "name" in cookie and "value" in cookie and "timestamp" in cookie:
+                ts = datetime.fromisoformat(cookie["timestamp"])
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                cache[cookie["name"]] = CacheEntry(
+                    value=cookie["value"],
+                    timestamp=ts,
+                    ttl_seconds=section.get("ttl_seconds", 28800),
+                )
+        return cache
+
+    def save_cookie_cache(self, user: str, env: str, domain: str, cache: Dict[str, CacheEntry]) -> None:
+        """Save the cookie cache for a given user, environment, and domain.
+
+        Args:
+            user (str): The user key.
+            env (str): The environment key.
+            domain (str): The domain key.
+            cache (Dict[str, CacheEntry]): Mapping of cookie name to cache entry.
+
+        Returns:
+            None
+        """
+        section = (
+            self.config_data.setdefault("users", {})
+            .setdefault(user, {})
+            .setdefault(env, {})
+            .setdefault(domain, {})
+        )
+        cookies_list = []
+        for name, entry in cache.items():
+            cookies_list.append({
+                "name": name,
+                "value": entry.value,
+                "timestamp": entry.timestamp.isoformat(),
+            })
+        section["cookies"] = cookies_list
+
+
+    def update_cookie_cache(self, user: str, env: str, domain: str, name: str, value: str, ttl_seconds: Optional[int] = None) -> None:
+        """Update a single cookie cache entry for a given user, environment, domain, and cookie name.
+
+        Args:
+            user (str): The user key.
+            env (str): The environment key.
+            domain (str): The domain key.
+            name (str): The cookie name.
+            value (str): The cookie value.
+            ttl_seconds (Optional[int]): Optional TTL override in seconds.
+
+        Returns:
+            None
+        """
+        section = (
+            self.config_data.setdefault("users", {})
+            .setdefault(user, {})
+            .setdefault(env, {})
+            .setdefault(domain, {})
+        )
+        cookies = section.setdefault("cookies", [])
+        now = datetime.now(timezone.utc)
+        # Find existing cookie
+        found = False
+        for cookie in cookies:
+            if cookie.get("name") == name:
+                cookie["value"] = value
+                cookie["timestamp"] = now.isoformat()
+                found = True
+                break
+        if not found:
+            cookies.append({
+                "name": name,
+                "value": value,
+                "timestamp": now.isoformat(),
+            })
+        if ttl_seconds is not None:
+            section["ttl_seconds"] = ttl_seconds
+
+
+    def clear_cookie_cache(self, user: str, env: str, domain: str) -> None:
+        """Clear all cookie cache entries for a given user, environment, and domain.
+
+        Args:
+            user (str): The user key.
+            env (str): The environment key.
+            domain (str): The domain key.
+
+        Returns:
+            None
+        """
+        section = (
+            self.config_data.setdefault("users", {})
+            .setdefault(user, {})
+            .setdefault(env, {})
+            .setdefault(domain, {})
+        )
+        section["cookies"] = []
+
+
+    def get_valid_cookie_cache(self, user: str, env: str, domain: str) -> Dict[str, CacheEntry]:
+        """Get only valid (non-expired) cookie cache entries for a given user, environment, and domain.
+
+        Args:
+            user (str): The user key.
+            env (str): The environment key.
+            domain (str): The domain key.
+
+        Returns:
+            Dict[str, CacheEntry]: Mapping of cookie name to valid cache entry.
+        """
+        cache = self.load_cookie_cache(user, env, domain)
+        now = datetime.now(timezone.utc)
+        valid_cache = {}
+        for name, entry in cache.items():
+            if entry.is_valid(now=now):
+                valid_cache[name] = entry
+        return valid_cache
+
