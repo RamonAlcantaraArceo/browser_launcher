@@ -255,3 +255,97 @@ class CookieConfig:
                 valid_cache[name] = entry
         return valid_cache
 
+    def load_cookie_cache_from_config(self, user: str, env: str, domain: str) -> Dict[str, CacheEntry]:
+        """Parse persisted cookies from config for a given user, environment, and domain.
+
+        Args:
+            user (str): The user key.
+            env (str): The environment key.
+            domain (str): The domain key.
+
+        Returns:
+            Dict[str, CacheEntry]: Mapping of cookie name to cache entry.
+        """
+        section = (
+            self.config_data.get("users", {}).get(user, {}).get(env, {}).get(domain, {})
+        )
+        ttl = section.get("ttl_seconds", 28800)
+        cache: Dict[str, CacheEntry] = {}
+        for cookie in section.get("cookies", []):
+            if "name" in cookie and "value" in cookie and "timestamp" in cookie:
+                ts = datetime.fromisoformat(cookie["timestamp"])
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                cache[cookie["name"]] = CacheEntry(
+                    value=cookie["value"],
+                    timestamp=ts,
+                    ttl_seconds=ttl,
+                )
+        return cache
+
+    def save_cookies_to_cache(self, user: str, env: str, domain: str, cookies: Dict[str, CacheEntry]) -> None:
+        """Persist cookies to config for a given user, environment, and domain with current timestamp.
+
+        Args:
+            user (str): The user key.
+            env (str): The environment key.
+            domain (str): The domain key.
+            cookies (Dict[str, CacheEntry]): Mapping of cookie name to cache entry.
+
+        Returns:
+            None
+        """
+        section = (
+            self.config_data.setdefault("users", {})
+            .setdefault(user, {})
+            .setdefault(env, {})
+            .setdefault(domain, {})
+        )
+        cookies_list = []
+        for name, entry in cookies.items():
+            cookies_list.append({
+                "name": name,
+                "value": entry.value,
+                "timestamp": entry.timestamp.isoformat(),
+            })
+        section["cookies"] = cookies_list
+
+    def prune_expired_cookies(self, user: str, env: str, domain: str) -> None:
+        """Remove stale (expired) cookie entries from config for a given user, environment, and domain.
+
+        Args:
+            user (str): The user key.
+            env (str): The environment key.
+            domain (str): The domain key.
+
+        Returns:
+            None
+        """
+        section = (
+            self.config_data.setdefault("users", {})
+            .setdefault(user, {})
+            .setdefault(env, {})
+            .setdefault(domain, {})
+        )
+        ttl = section.get("ttl_seconds", 28800)
+        now = datetime.now(timezone.utc)
+        cookies = section.get("cookies", [])
+        valid_cookies = []
+        for cookie in cookies:
+            if "name" in cookie and "value" in cookie and "timestamp" in cookie:
+                ts = datetime.fromisoformat(cookie["timestamp"])
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                entry = CacheEntry(
+                    value=cookie["value"],
+                    timestamp=ts,
+                    ttl_seconds=ttl,
+                )
+                if entry.is_valid(now=now):
+                    valid_cookies.append({
+                        "name": cookie["name"],
+                        "value": cookie["value"],
+                        "timestamp": cookie["timestamp"],
+                    })
+        section["cookies"] = valid_cookies
+

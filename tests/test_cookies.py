@@ -214,3 +214,98 @@ def test_get_valid_cookie_cache_filters_expired_entries():
     assert "token" in valid_cache
     assert "expired" not in valid_cache
     assert valid_cache["token"].is_valid(now=now)
+
+def test_load_cookie_cache_from_config_returns_dict_of_cache_entries():
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    config_data = {
+        "users": {
+            "carol": {
+                "stage": {
+                    "demo_com": {
+                        "cookies": [
+                            {
+                                "name": "session",
+                                "value": "val",
+                                "timestamp": now.isoformat(),
+                            },
+                            {
+                                "name": "expired",
+                                "value": "old",
+                                "timestamp": (now - timedelta(hours=9)).isoformat(),
+                            },
+                        ],
+                        "ttl_seconds": 28800,
+                    }
+                }
+            }
+        }
+    }
+    config = CookieConfig(config_data)
+    cache = config.load_cookie_cache_from_config("carol", "stage", "demo_com")
+    assert isinstance(cache, dict)
+    assert "session" in cache
+    assert cache["session"].value == "val"
+    assert cache["session"].timestamp == now
+    assert cache["session"].ttl_seconds == 28800
+    assert "expired" in cache
+    assert cache["expired"].value == "old"
+
+def test_save_cookies_to_cache_persists_entries():
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    config_data = {
+        "users": {
+            "carol": {
+                "stage": {
+                    "demo_com": {
+                        "cookies": [],
+                        "ttl_seconds": 28800,
+                    }
+                }
+            }
+        }
+    }
+    config = CookieConfig(config_data)
+    cookies = {
+        "session": CacheEntry(value="val", timestamp=now, ttl_seconds=28800),
+        "token": CacheEntry(value="tok", timestamp=now, ttl_seconds=28800),
+    }
+    config.save_cookies_to_cache("carol", "stage", "demo_com", cookies)
+    persisted = config_data["users"]["carol"]["stage"]["demo_com"]["cookies"]
+    assert len(persisted) == 2
+    names = {c["name"] for c in persisted}
+    assert "session" in names
+    assert "token" in names
+    for c in persisted:
+        assert c["value"] in ["val", "tok"]
+        assert c["timestamp"] == now.isoformat()
+
+def test_prune_expired_cookies_removes_stale_entries():
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    config_data = {
+        "users": {
+            "carol": {
+                "stage": {
+                    "demo_com": {
+                        "cookies": [
+                            {
+                                "name": "session",
+                                "value": "val",
+                                "timestamp": now.isoformat(),
+                            },
+                            {
+                                "name": "expired",
+                                "value": "old",
+                                "timestamp": (now - timedelta(hours=9)).isoformat(),
+                            },
+                        ],
+                        "ttl_seconds": 28800,
+                    }
+                }
+            }
+        }
+    }
+    config = CookieConfig(config_data)
+    config.prune_expired_cookies("carol", "stage", "demo_com")
+    cookies = config_data["users"]["carol"]["stage"]["demo_com"]["cookies"]
+    assert len(cookies) == 1
+    assert cookies[0]["name"] == "session"
