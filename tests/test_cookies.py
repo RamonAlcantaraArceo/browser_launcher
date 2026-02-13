@@ -445,7 +445,7 @@ def test_inject_and_verify_cookies():
         {"name": "new_cookie", "value": "new_value", "domain": "example.com"},
     ]
 
-    inject_and_verify_cookies(mock_launcher, "example_com", "alice", "prod", config)
+    inject_and_verify_cookies(mock_launcher, "alice", "prod", config)
 
     # Verify that cookies were read and injected
     mock_driver.get_cookies.assert_called()
@@ -481,7 +481,7 @@ def test_inject_and_verify_cookies_expired():
 
     # With expired cookies, should not attempt to add cookies but should
     # read from browser
-    inject_and_verify_cookies(mock_launcher, "example_com", "alice", "prod", config)
+    inject_and_verify_cookies(mock_launcher, "alice", "prod", config)
 
     # Verify get_cookies was called (reading from browser always happens)
     mock_driver.get_cookies.assert_called()

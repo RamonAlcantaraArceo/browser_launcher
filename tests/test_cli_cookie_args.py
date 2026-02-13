@@ -49,9 +49,7 @@ def test_inject_and_verify_cookies_signature():
 
     mock_config = MagicMock()
     try:
-        inject_and_verify_cookies(
-            DummyLauncher(), "example_com", "alice", "staging", mock_config
-        )
+        inject_and_verify_cookies(DummyLauncher(), "alice", "staging", mock_config)
     except NotImplementedError:
         pass
     except Exception:

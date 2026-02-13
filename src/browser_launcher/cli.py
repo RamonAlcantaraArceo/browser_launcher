@@ -302,35 +302,34 @@ def launch(  # noqa: C901
     try:
         parsed_url = urlparse(launch_url)
         domain = parsed_url.netloc or parsed_url.path.split("/")[0]
-
-        # Load cookie config and inject cached cookies if available
-        try:
-            cookie_config_data = config_loader.config_data
-            cookie_config = CookieConfig(cookie_config_data)
-            logger.info(
-                f"Attempting to inject cookies for domain {domain} "
-                f"(user={user}, env={env})"
-            )
-
-            injected_cookies = inject_and_verify_cookies(
-                bl, domain, user, env, cookie_config
-            )
-            if injected_cookies:
-                console.print(
-                    f"✅ Injected {len(injected_cookies)} cookies: "
-                    f"{[cookie['name'] for cookie in injected_cookies]}"
-                )
-
-                if url:
-                    bl.safe_get_address(url + "/ui")
-        except Exception as e:
-            logger.warning(
-                f"Failed to inject/verify cookies for {domain}: {e}", exc_info=True
-            )
-            # Continue execution even if cookie injection fails
     except Exception as e:
         logger.warning(f"Could not extract domain from URL {launch_url}: {e}")
-        # Continue execution even if domain extraction fails
+    # Continue execution even if domain extraction fails
+
+    # Load cookie config and inject cached cookies if available
+    try:
+        cookie_config_data = config_loader.config_data
+        cookie_config = CookieConfig(cookie_config_data)
+        logger.info(
+            f"Attempting to inject cookies for domain {domain} (user={user}, env={env})"
+        )
+
+        injected_cookies = inject_and_verify_cookies(bl, user, env, cookie_config)
+
+        if injected_cookies:
+            console.print(
+                f"✅ Injected {len(injected_cookies)} cookies: "
+                f"{[cookie['name'] for cookie in injected_cookies]}"
+            )
+
+            if url:
+                bl.safe_get_address(url + "/ui")
+
+    except Exception as e:
+        logger.warning(
+            f"Failed to inject/verify cookies for {domain}: {e}", exc_info=True
+        )
+        # Continue execution even if cookie injection fails
 
     # There are defaults already
     # app_name = "Demo"

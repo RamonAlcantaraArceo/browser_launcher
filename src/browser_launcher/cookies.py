@@ -6,10 +6,13 @@ cookie rules and cache.
 All docstrings use Google-style format.
 """
 
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+from selenium import webdriver
 
 logger = logging.getLogger(__name__)
 
@@ -452,38 +455,49 @@ def read_cookies_from_browser(driver: Any, domain: str) -> List[Dict[str, Any]]:
         raise AttributeError(f"Driver does not have get_cookies() method: {e}") from e
 
     # Convert config key to real domain for filtering
-    real_domain = config_key_to_domain(domain)
     filtered_cookies = []
     excluded_cookies = []
     for cookie in all_cookies:
         cookie_domain = cookie.get("domain", "")
-        if cookie_domain.endswith(real_domain):
+        if cookie_domain.endswith(domain):
             filtered_cookies.append(cookie)
             logger.debug(
                 f"Including cookie '{cookie.get('name')}' with domain "
-                f"'{cookie_domain}' for filter '{real_domain}'."
+                f"'{cookie_domain}' for filter '{domain}'."
             )
         else:
             excluded_cookies.append(cookie)
             logger.debug(
                 f"Excluding cookie '{cookie.get('name')}' with domain "
-                f"'{cookie_domain}' for filter '{real_domain}'."
+                f"'{cookie_domain}' for filter '{domain}'."
             )
     logger.info(
-        f"Read {len(filtered_cookies)} cookies for domain '{real_domain}' from browser."
+        f"Read {len(filtered_cookies)} cookies for domain '{domain}' from browser."
     )
-    logger.debug(f"Cookies read from browser: {filtered_cookies}")
+    summary = [
+        {
+            "name": c.get("name"),
+            "domain": c.get("domain"),
+            "value": c.get("value", "")[:4],
+        }
+        for c in filtered_cookies
+    ]
+    logger.debug(
+        "Cookies read from browser (summary): %s", json.dumps(summary, indent=2)
+    )
     return filtered_cookies
 
 
-def write_cookies_to_browser(driver: Any, cookies: List[Dict[str, Any]]) -> None:
+def write_cookies_to_browser(
+    driver: webdriver.Ie, cookies: List[Dict[str, Any]]
+) -> None:
     """Inject cookies into the browser via the Selenium driver.
 
     Adds the given list of cookies to the browser session. Handles any exceptions
     that occur during cookie injection and logs them appropriately.
 
     Args:
-        driver (Any): A Selenium WebDriver instance.
+        driver (webdriver.Ie): A Selenium WebDriver instance.
         cookies (List[Dict[str, Any]]): List of cookie dictionaries to inject.
             Each dictionary should have 'name' and 'value' keys at minimum.
         domain (str): The domain scope for the cookies (for reference/logging).
@@ -499,6 +513,17 @@ def write_cookies_to_browser(driver: Any, cookies: List[Dict[str, Any]]) -> None
         # Do NOT set the domain field; let Selenium use the current page's domain
         poped_domain = cookie_to_add.pop("domain", None)
         try:
+            if driver.get_cookie(
+                cookie_to_add["name"]
+            ):  # Check if cookie already exists
+                driver.delete_cookie(
+                    cookie_to_add["name"]
+                )  # Remove existing cookie before adding
+                logger.debug(
+                    f"Deleted existing cookie '{cookie_to_add['name']}'"
+                    " before adding cached"
+                )
+
             driver.add_cookie(cookie_to_add)
             logger.debug(
                 f"Injected cookie '{cookie.get('name')}' for domain "
@@ -540,8 +565,8 @@ def get_applicable_rules(
 
 
 def inject_and_verify_cookies(
-    launcher: Any, domain: str, user: str, env: str, cookie_config: CookieConfig
-) -> Optional[list]:
+    launcher: Any, user: str, env: str, cookie_config: CookieConfig
+) -> Optional[List[Dict[str, Any]]]:
     """Main integration hook to inject cached cookies and verify authenticity.
 
     Performs the following workflow:
@@ -555,18 +580,17 @@ def inject_and_verify_cookies(
 
     Args:
         launcher (Any): A BrowserLauncher instance with a driver and logger.
-        domain (str): The domain to operate on.
         user (str): The user context.
         env (str): The environment context.
         cookie_config (CookieConfig): The loaded cookie configuration.
 
     Returns:
-        None
+        Optional[List[Dict[str, Any]]]: The cookies that were injected, or None.
 
     Raises:
         AttributeError: If launcher lacks expected driver or logger attributes.
     """
-    cookies_to_inject: Optional[list] = None
+    cookies_to_inject: Optional[List[Dict[str, Any]]] = None
     try:
         target_domains = [
             val["domain"]
@@ -575,13 +599,13 @@ def inject_and_verify_cookies(
 
         valid_cache = {}
         for target_domain in target_domains:
-            value = cookie_config.get_valid_cookie_cache(user, env, target_domain)
-            valid_cache.update(value)
+            cache_dict = cookie_config.get_valid_cookie_cache(user, env, target_domain)
+            valid_cache.update(cache_dict)
 
         if valid_cache:
             logger.info(
                 f"Found {len(valid_cache)} valid cached cookies for "
-                f"{user}/{env}:{domain}"
+                f"{user}/{env}:{target_domains}"
             )
 
             # Convert cache entries to cookie dicts for injection
@@ -593,19 +617,34 @@ def inject_and_verify_cookies(
             # Inject cookies into the browser
             write_cookies_to_browser(launcher.driver, cookies_to_inject)
         else:
-            logger.info(f"No valid cached cookies found for {user}/{env}:{domain}")
+            logger.info(
+                f"No valid cached cookies found for {user}/{env}:{target_domains}"
+            )
 
         # Read cookies back from the browser to verify or update cache
-        browser_cookies = read_cookies_from_browser(launcher.driver, domain)
+        browser_cookies: List[Dict[str, Any]] = []
+        for domain in target_domains:
+            browser_cookie_list = read_cookies_from_browser(launcher.driver, domain)
+            for cookie_entry in browser_cookie_list:
+                if not any(
+                    browser_cookie["name"] == cookie_entry["name"]
+                    for browser_cookie in browser_cookies
+                ) and cookie_entry.get("name") in list(valid_cache.keys()):
+                    browser_cookies.append(cookie_entry)
 
         if browser_cookies:
             logger.info(
-                f"Read {len(browser_cookies)} cookies from browser for domain {domain}"
+                f"Read {len(browser_cookies)} cookies from browser for"
+                f" domain {target_domains}"
             )
             # Update cache with cookies from browser
             for cookie in browser_cookies:
                 cookie_config.update_cookie_cache(
-                    user, env, domain, cookie["name"], cookie.get("value", "")
+                    user,
+                    env,
+                    cookie.get("domain", ""),
+                    cookie["name"],
+                    cookie.get("value", ""),
                 )
 
     except AttributeError as e:
