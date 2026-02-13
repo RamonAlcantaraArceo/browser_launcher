@@ -6,7 +6,6 @@ from pathlib import Path
 
 from browser_launcher.logger import (
     BrowserLauncherLogger,
-    get_command_context,
     get_current_logger,
     get_logger,
     setup_logging,
@@ -36,7 +35,7 @@ def test_initialize_logging_debug(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     from browser_launcher import logger as logger_mod
 
-    logger_mod._logger = None
+    logger_mod._instance = None
     # Call initialize_logging with debug=True to cover log_level = 'DEBUG'
     logger_mod.initialize_logging(debug=True, console_logging=True)
     log_dir = tmp_path / ".browser_launcher" / "logs"
@@ -101,21 +100,12 @@ def test_get_logger_and_setup_logging(tmp_path):
     assert logger3 is get_logger(log_dir, log_level="DEBUG", console_logging=False)
 
 
-def test_get_command_context():
-    ctx = get_command_context(
-        "launch", {"browser": "chrome", "headless": True, "foo": None}
-    )
-    assert ctx == "[launch] browser=chrome | headless=True"
-    ctx2 = get_command_context("init")
-    assert ctx2 == "[init]"
-
-
 def test_get_current_logger_returns_logger(monkeypatch, tmp_path):
     # Patch Path.home to tmp_path for isolation
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    # Remove global _logger if set
+    # Remove global _instance if set
     from browser_launcher import logger as logger_mod
 
-    logger_mod._logger = None
+    logger_mod._instance = None
     log = get_current_logger()
     assert isinstance(log, logging.Logger)

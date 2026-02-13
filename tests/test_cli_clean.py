@@ -1,9 +1,31 @@
+from pathlib import Path
+
 from typer.testing import CliRunner
 
 from browser_launcher.cli import app
 
 
-def setup_temp_home(tmp_path):
+def setup_temp_home(tmp_path: Path) -> Path:
+    """
+    Create a temporary home directory structure for testing purposes.
+
+    This fixture sets up a temporary directory with a `.browser_launcher`
+    subdirectory and a dummy text file for testing browser launcher
+    functionality in isolation.
+
+    Args:
+        tmp_path: A pytest temporary directory fixture that
+            provides a unique temporary directory for the test.
+
+    Returns:
+        The path to the created `.browser_launcher` directory
+        containing the test dummy file.
+
+    Example:
+        >>> home = setup_temp_home(tmp_path)
+        >>> (home / "dummy.txt").read_text()
+        'test'
+    """
     home_dir = tmp_path / ".browser_launcher"
     home_dir.mkdir()
     (home_dir / "dummy.txt").write_text("test")

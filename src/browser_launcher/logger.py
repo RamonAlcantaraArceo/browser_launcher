@@ -4,11 +4,10 @@ import logging
 import logging.handlers
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
-# Global logger instance for CLI and other modules
-_logger: Optional[logging.Logger] = None
-_instance: Any = None
+# Global singleton instance for logger management
+_instance: Optional["BrowserLauncherLogger"] = None
 
 
 class BrowserLauncherLogger:
@@ -21,6 +20,8 @@ class BrowserLauncherLogger:
         max_file_size: int = 10 * 1024 * 1024,  # 10MB
         backup_count: int = 5,
         console_logging: bool = True,
+        logger_name: str = "browser_launcher",
+        log_file_name: Optional[str] = None,
     ):
         """Initialize the logger.
 
@@ -30,18 +31,23 @@ class BrowserLauncherLogger:
             max_file_size: Maximum size of log file before rotation
             backup_count: Number of backup files to keep
             console_logging: Whether to enable console logging
+            logger_name: Name for the logger instance (default: "browser_launcher")
+            log_file_name: Optional log file name. If not set, uses logger_name
+                + ".log".
         """
         self.log_dir = log_dir
         self.log_level = getattr(logging, log_level.upper(), logging.INFO)
         self.max_file_size = max_file_size
         self.backup_count = backup_count
         self.console_logging = console_logging
+        self.logger_name = logger_name
+        self.log_file_name = log_file_name or f"{self.logger_name}.log"
 
         # Create logs directory if it doesn't exist
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
         # Setup logger
-        self.logger = logging.getLogger("browser_launcher")
+        self.logger = logging.getLogger(self.logger_name)
         self.logger.setLevel(self.log_level)
 
         # Clear any existing handlers
@@ -59,7 +65,7 @@ class BrowserLauncherLogger:
         )
 
         # Setup file logging with rotation
-        log_file = self.log_dir / "browser_launcher.log"
+        log_file = self.log_dir / self.log_file_name
         file_handler = logging.handlers.RotatingFileHandler(
             log_file,
             maxBytes=self.max_file_size,
@@ -111,7 +117,11 @@ class BrowserLauncherLogger:
 
 
 def get_logger(
-    log_dir: Path, log_level: str = "INFO", console_logging: bool = True
+    log_dir: Path,
+    log_level: str = "INFO",
+    console_logging: bool = True,
+    logger_name: str = "browser_launcher",
+    log_file_name: Optional[str] = None,
 ) -> logging.Logger:
     """Get a configured logger instance.
 
@@ -127,14 +137,22 @@ def get_logger(
     global _instance
     if _instance is None:
         _instance = BrowserLauncherLogger(
-            log_dir=log_dir, log_level=log_level, console_logging=console_logging
+            log_dir=log_dir,
+            log_level=log_level,
+            console_logging=console_logging,
+            logger_name=logger_name,
+            log_file_name=log_file_name,
         )
 
     return _instance.get_logger()
 
 
 def setup_logging(
-    log_dir: Path, log_level: str = "INFO", console_logging: bool = True
+    log_dir: Path,
+    log_level: str = "INFO",
+    console_logging: bool = True,
+    logger_name: str = "browser_launcher",
+    log_file_name: Optional[str] = None,
 ) -> logging.Logger:
     """Setup and configure logging for browser_launcher.
 
@@ -150,7 +168,7 @@ def setup_logging(
     global _instance
     _instance = None
 
-    return get_logger(log_dir, log_level, console_logging)
+    return get_logger(log_dir, log_level, console_logging, logger_name, log_file_name)
 
 
 def initialize_logging(
@@ -165,7 +183,6 @@ def initialize_logging(
         debug: Enable debug logging (DEBUG level)
         console_logging: Enable console logging (default False)
     """
-    global _logger
     # Determine log level
     if log_level:
         pass  # pragma nocover
@@ -177,7 +194,7 @@ def initialize_logging(
         log_level = "WARNING"
 
     log_dir = Path.home() / ".browser_launcher" / "logs"
-    _logger = setup_logging(
+    logger = setup_logging(
         log_dir=log_dir, log_level=log_level, console_logging=console_logging
     )
     # NOTE:
@@ -186,36 +203,15 @@ def initialize_logging(
     # - Do NOT use `logging.getLogger` or the default Python logger directly in CLI.
     # - Logging and user output are strictly separated in all commands.
     if debug:
-        _logger.debug("Logging initialized at DEBUG level")
+        logger.debug("Logging initialized at DEBUG level")
     elif verbose:
-        _logger.info("Logging initialized at INFO level")
+        logger.info("Logging initialized at INFO level")
     else:
-        _logger.warning(f"Logging initialized at {log_level} level")
+        logger.warning(f"Logging initialized at {log_level} level")
 
 
-def get_current_logger():
+def get_current_logger() -> Optional[logging.Logger]:
     """Get the current logger instance."""
-    global _logger
-    if _logger is None:
+    if _instance is None:
         initialize_logging()
-    return _logger
-
-
-def get_command_context(command: str, args: Optional[dict] = None) -> str:
-    """Generate a context string for logging.
-
-    Args:
-        command: The command being executed
-        args: Optional dictionary of command arguments
-
-    Returns:
-        Formatted context string
-    """
-    if args:
-        # Filter out None values and format arguments
-        filtered_args = {k: v for k, v in args.items() if v is not None}
-        if filtered_args:
-            args_str = " | ".join(f"{k}={v}" for k, v in filtered_args.items())
-            return f"[{command}] {args_str}"
-
-    return f"[{command}]"
+    return _instance.get_logger() if _instance else None

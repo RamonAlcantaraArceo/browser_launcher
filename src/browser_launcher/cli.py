@@ -1,5 +1,7 @@
 """CLI interface for browser_launcher using Typer."""
 
+import json
+import logging
 import sys
 from importlib import resources
 from pathlib import Path
@@ -19,11 +21,11 @@ from browser_launcher.cookies import (
     read_cookies_from_browser,
 )
 from browser_launcher.logger import (
-    get_command_context,
     get_current_logger,
     initialize_logging,
 )
 from browser_launcher.screenshot import IDGenerator, _capture_screenshot
+from browser_launcher.utils import get_command_context
 
 app = typer.Typer(help="Browser launcher CLI tool")
 console = Console()
@@ -106,8 +108,6 @@ def init(
         )
         console.print("[yellow]Use --force to reinitialize[/yellow]")
         return
-
-    import logging
 
     logger: Optional[logging.Logger] = None
     try:
@@ -290,6 +290,12 @@ def launch(  # noqa: C901
     console.print(f"🚀 Launching {selected_browser} at {launch_url}")
     logger.info(f"Launching {selected_browser} at {launch_url}")
 
+    domain: Optional[str] = None  # Initialize domain variable for later use
+    cookie_config_data: dict = {}  # Initialize cookie_config_data for later use
+    cookie_config: Optional[CookieConfig] = (
+        None  # Initialize cookie_config for later use
+    )
+
     # Launch browser
     try:
         bl.launch(url=launch_url)
@@ -371,12 +377,14 @@ def launch(  # noqa: C901
                     target_cookies = list(
                         cookie_config_data["users"][user][env]["cookies"].keys()
                     )
-                    target_domains = [
-                        val["domain"]
-                        for val in cookie_config_data["users"][user][env][
-                            "cookies"
-                        ].values()
-                    ]
+                    target_domains = list(
+                        {
+                            val["domain"]
+                            for val in cookie_config_data["users"][user][env][
+                                "cookies"
+                            ].values()
+                        }
+                    )
                     browser_cookies = []
                     target_browser_cookies = []
                     for target_domain in target_domains:
@@ -384,14 +392,25 @@ def launch(  # noqa: C901
                             read_cookies_from_browser(bl.driver, target_domain)
                         )
                     for cookie in browser_cookies:
-                        if cookie["name"] in target_cookies:
+                        if cookie["name"] in target_cookies and cookie["name"] not in [
+                            c["name"] for c in target_browser_cookies
+                        ]:
                             target_browser_cookies.append(cookie)
 
                     logger.info(
                         f"Read {len(target_browser_cookies)} cookies from browser for"
-                        f" {user}/{env}:{target_domain}"
+                        f" {user}/{env}:{target_domains}"
                     )
                     if target_browser_cookies:
+                        if cookie_config is None:
+                            logger.error(
+                                "CookieConfig is not initialized, cannot update cache"
+                            )
+                            console.print(
+                                "❌ [red]Error:[/red] CookieConfig is not initialized, "
+                                "cannot update cache"
+                            )
+                            continue
                         # Update cache entries for each cookie
                         for cookie in target_browser_cookies:
                             cookie_config.update_cookie_cache(
@@ -406,17 +425,22 @@ def launch(  # noqa: C901
                         # Save config back to file
 
                         config_file = get_home_directory() / "config.toml"
-                        with open(config_file, "wb") as f:
-                            tomli_w.dump(cookie_config.config_data, f)
+                        if cookie_config:
+                            with open(config_file, "wb") as f:
+                                tomli_w.dump(cookie_config.config_data, f)
                         console.print(
                             f"✅ Cached {len(target_browser_cookies)} cookies for "
-                            f"{user}/{env}/{domain}"
+                            f"{user}/{env}/{target_domains}"
                         )
                         logger.info(
                             f"Saved {len(target_browser_cookies)} cookies "
-                            f"for {user}/{env}/{domain}"
+                            f"for {user}/{env}/{target_domains}"
                         )
-                        logger.debug(f"Cookies: {cookie_config.config_data}")
+                        if cookie_config:
+                            users_json = json.dumps(
+                                cookie_config.config_data["users"], indent=2
+                            )
+                            logger.debug(f"Cookies: {users_json}")
                     else:
                         console.print(f"⚠️ No cookies found for domain {domain}")
                         logger.debug(f"⚠️ No cookies found for domain {domain}")
