@@ -4,6 +4,7 @@ import json
 import logging
 import sys
 import termios
+import time
 import tty
 from importlib import resources
 from pathlib import Path
@@ -504,6 +505,10 @@ def launch(  # noqa: C901
                     console.print(f"❌ Error caching cookies: {e}")
                     logger.error(f"Error caching cookies: {e}", exc_info=True)
 
+            elif char.lower() == "c":
+                # And replace the selection with:
+                _dump_cookies_from_browser(bl.driver, logger, console)
+
     except EOFError:
         console.print("\nExiting...")
     finally:
@@ -518,6 +523,91 @@ def launch(  # noqa: C901
         except Exception:
             pass
 
+def _dump_cookies_from_browser(
+        driver,
+        logger: logging.Logger,
+        console: Console,
+    ) -> None:
+        """Dump cookies from the browser for the specified domain.
+        
+        Args:
+            driver: The browser driver instance
+            logger: Logger instance for logging
+            console: Console instance for user output
+        """
+
+        browser_cookies = read_cookies_from_browser(driver, "")
+        try:
+
+            from rich.table import Table
+
+            current_url = getattr(driver, "current_url", "")
+            parsed_url = urlparse(current_url)
+            effective_domain = parsed_url.netloc or parsed_url.path.split("/")[0]
+
+            table = Table(
+                title=f"Cookies from browser for domain {effective_domain or '*'}"
+            )
+            table.add_column("#", justify="right")
+            table.add_column("Name", style="cyan", no_wrap=True)
+            table.add_column("Value (first 6 chars)", style="magenta")
+            table.add_column("Domain")
+            table.add_column("Path")
+            table.add_column("Secure")
+            table.add_column("HttpOnly")
+            table.add_column("SameSite")
+            table.add_column("Expiry")
+            sorted_cookies = sorted(
+                browser_cookies,
+                key=lambda cookie: str(cookie.get("name", "")).lower(),
+            )
+            for index, cookie in enumerate(sorted_cookies, start=1):
+                value_preview = cookie["value"][:6] if cookie.get("value") else ""
+                table.add_row(
+                    str(index),
+                    cookie.get("name", ""),
+                    f"{value_preview}..." if value_preview else "",
+                    str(cookie.get("domain", "")),
+                    str(cookie.get("path", "")),
+                    "yes" if bool(cookie.get("secure", False)) else "no",
+                    "yes" if bool(cookie.get("httpOnly", False)) else "no",
+                    str(cookie.get("sameSite", "")),
+                    _format_cookie_expiry(cookie.get("expiry")),
+                )
+            console.print(table)
+            logger.info(
+                f"Dumped {len(browser_cookies)} cookies from browser for "
+                f"domain {effective_domain}"
+            )
+        except Exception as e:
+            console.print(f"❌ Error reading cookies: {e}")
+            logger.error(f"Error reading cookies: {e}", exc_info=True)
+
+
+def _format_cookie_expiry(expiry: object) -> str:
+    """Format cookie expiry timestamp as a readable relative duration."""
+    if expiry is None:
+        return "session"
+
+    try:
+        expiry_ts = float(expiry)
+    except (TypeError, ValueError):
+        return "invalid"
+
+    remaining_seconds = int(expiry_ts - time.time())
+    if remaining_seconds <= 0:
+        return "expired"
+    if remaining_seconds < 60:
+        return f"+{remaining_seconds}s"
+    if remaining_seconds < 3600:
+        minutes = (remaining_seconds + 59) // 60
+        return f"+{minutes}m"
+    if remaining_seconds < 86400:
+        hours = (remaining_seconds + 3599) // 3600
+        return f"+{hours}h"
+
+    days = (remaining_seconds + 86399) // 86400
+    return f"+{days}d"
 
 @app.command()
 def clean(  # noqa: C901
