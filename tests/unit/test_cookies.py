@@ -3,6 +3,8 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
+import pytest
+
 from browser_launcher.cookies import (
     CacheEntry,
     CookieConfig,
@@ -14,6 +16,7 @@ from browser_launcher.cookies import (
 )
 
 
+@pytest.mark.unit
 def test_cookie_rule_fields():
     """Test CookieRule dataclass fields and defaults."""
     rule = CookieRule(domain="example.com", name="sessionid")
@@ -23,6 +26,7 @@ def test_cookie_rule_fields():
     assert rule.ttl_seconds is None
 
 
+@pytest.mark.unit
 def test_cache_entry_validity():
     """Test CacheEntry validity based on TTL and timestamp."""
     now = datetime.now(timezone.utc)  # datetime.utcnow()
@@ -37,6 +41,7 @@ def test_cache_entry_validity():
     assert not short.is_valid(now=now)
 
 
+@pytest.mark.unit
 def test_cookie_config_get_rules_and_cache_entries():
     """Test CookieConfig rule and cache entry extraction from hierarchical config."""
     now = datetime.now(timezone.utc).replace(microsecond=0)
@@ -72,6 +77,7 @@ def test_cookie_config_get_rules_and_cache_entries():
     assert entries[0].is_valid(now=now)
 
 
+@pytest.mark.unit
 def test_load_cookie_cache_returns_dict_of_cache_entries():
     now = datetime.now(timezone.utc).replace(microsecond=0)
     config_data = {
@@ -108,6 +114,7 @@ def test_load_cookie_cache_returns_dict_of_cache_entries():
     assert cache["expired"].value == "old"
 
 
+@pytest.mark.unit
 def test_save_cookie_cache_updates_config_data():
     now = datetime.now(timezone.utc).replace(microsecond=0)
     config_data: dict[str, dict] = {"users": {"bob": {"dev": {"cookies": {}}}}}
@@ -129,6 +136,7 @@ def test_save_cookie_cache_updates_config_data():
     assert cookies["session"]["timestamp"] == now.isoformat()
 
 
+@pytest.mark.unit
 def test_update_cookie_cache_adds_and_modifies_entry():
     now = datetime.now(timezone.utc).replace(microsecond=0)
     config_data = {
@@ -165,6 +173,7 @@ def test_update_cookie_cache_adds_and_modifies_entry():
     assert session_cookie["timestamp"]
 
 
+@pytest.mark.unit
 def test_clear_cookie_cache_removes_all_entries():
     now = datetime.now(timezone.utc).replace(microsecond=0)
     config_data = {
@@ -197,6 +206,7 @@ def test_clear_cookie_cache_removes_all_entries():
     assert "other_domain_cookie" in cookies
 
 
+@pytest.mark.unit
 def test_get_valid_cookie_cache_filters_expired_entries():
     now = datetime.now(timezone.utc).replace(microsecond=0)
     config_data = {
@@ -228,6 +238,7 @@ def test_get_valid_cookie_cache_filters_expired_entries():
     assert valid_cache["token"].is_valid(now=now)
 
 
+@pytest.mark.unit
 def test_load_cookie_cache_from_config_returns_dict_of_cache_entries():
     now = datetime.now(timezone.utc).replace(microsecond=0)
     config_data = {
@@ -263,6 +274,7 @@ def test_load_cookie_cache_from_config_returns_dict_of_cache_entries():
     assert cache["expired"].value == "old"
 
 
+@pytest.mark.unit
 def test_save_cookies_to_cache_persists_entries():
     now = datetime.now(timezone.utc).replace(microsecond=0)
     config_data: dict[str, dict] = {"users": {"carol": {"stage": {"cookies": {}}}}}
@@ -284,6 +296,7 @@ def test_save_cookies_to_cache_persists_entries():
     assert persisted["token"]["timestamp"] == now.isoformat()
 
 
+@pytest.mark.unit
 def test_prune_expired_cookies_removes_stale_entries():
     now = datetime.now(timezone.utc).replace(microsecond=0)
     config_data = {
@@ -323,6 +336,7 @@ def test_prune_expired_cookies_removes_stale_entries():
     assert "other_domain" in cookies
 
 
+@pytest.mark.unit
 def test_read_cookies_from_browser():
     """Test reading cookies from Selenium driver filtered by domain."""
     mock_driver = MagicMock()
@@ -340,6 +354,7 @@ def test_read_cookies_from_browser():
     mock_driver.get_cookies.assert_called_once()
 
 
+@pytest.mark.unit
 def test_read_cookies_from_browser_empty():
     """Test reading cookies when none match the domain."""
     mock_driver = MagicMock()
@@ -352,6 +367,7 @@ def test_read_cookies_from_browser_empty():
     assert len(cookies) == 0
 
 
+@pytest.mark.unit
 def test_write_cookies_to_browser():
     """Test injecting cookies into Selenium driver."""
     mock_driver = MagicMock()
@@ -367,6 +383,7 @@ def test_write_cookies_to_browser():
     mock_driver.add_cookie.assert_any_call({"name": "token", "value": "xyz789"})
 
 
+@pytest.mark.unit
 def test_write_cookies_to_browser_empty():
     """Test writing empty cookie list (no-op)."""
     mock_driver = MagicMock()
@@ -376,6 +393,7 @@ def test_write_cookies_to_browser_empty():
     mock_driver.add_cookie.assert_not_called()
 
 
+@pytest.mark.unit
 def test_get_applicable_rules():
     """Test getting applicable cookie rules from hierarchical config."""
     config_data = {
@@ -405,6 +423,7 @@ def test_get_applicable_rules():
     assert rules[1].name == "auth"
 
 
+@pytest.mark.unit
 def test_get_applicable_rules_not_found():
     """Test getting rules for non-existent user/env/domain."""
     config_data: dict[str, dict] = {"users": {}}
@@ -415,6 +434,7 @@ def test_get_applicable_rules_not_found():
     assert len(rules) == 0
 
 
+@pytest.mark.unit
 def test_inject_and_verify_cookies():
     """Test the main integration hook for cookie injection and verification."""
     now = datetime.now(timezone.utc).replace(microsecond=0)
@@ -452,6 +472,7 @@ def test_inject_and_verify_cookies():
     mock_driver.add_cookie.assert_called()
 
 
+@pytest.mark.unit
 def test_inject_and_verify_cookies_expired():
     """Test injection hook with expired cached cookies (should not inject)."""
     now = datetime.now(timezone.utc).replace(microsecond=0)

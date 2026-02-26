@@ -27,6 +27,7 @@ class DummyLogger:
         ("edge", "EdgeLauncher"),
     ],
 )
+@pytest.mark.unit
 def test_factory_creates_supported_browsers(browser_name, expected_class):
     config = BrowserConfig(
         binary_path=None,
@@ -42,6 +43,7 @@ def test_factory_creates_supported_browsers(browser_name, expected_class):
     assert hasattr(launcher, "launch")
 
 
+@pytest.mark.unit
 def test_factory_raises_for_unsupported_browser():
     config = BrowserConfig(
         binary_path=None,
@@ -55,6 +57,7 @@ def test_factory_raises_for_unsupported_browser():
         BrowserFactory.create("opera", config, logger)
 
 
+@pytest.mark.unit
 def test_get_available_browsers_lists_all():
     browsers = BrowserFactory.get_available_browsers()
     assert set(browsers) == {"chrome", "firefox", "safari", "edge"}

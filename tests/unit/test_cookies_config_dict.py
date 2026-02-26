@@ -1,6 +1,9 @@
+import pytest
+
 from browser_launcher.cookies import CookieConfig
 
 
+@pytest.mark.unit
 def test_cookieconfig_dict_structure():
     config: dict[str, dict] = {}
     cc = CookieConfig(config)

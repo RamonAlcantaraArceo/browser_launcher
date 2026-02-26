@@ -31,6 +31,7 @@ def write_config(tmp_path, config_dict):
     return config_path
 
 
+@pytest.mark.unit
 def test_loads_config_and_properties(tmp_path):
     config_path = write_config(tmp_path, default_config)
     config = BrowserLauncherConfig(config_path)
@@ -39,6 +40,7 @@ def test_loads_config_and_properties(tmp_path):
     assert config.get_console_logging() is True
 
 
+@pytest.mark.unit
 def test_get_browser_config_returns_browserconfig(tmp_path):
     config_path = write_config(tmp_path, default_config)
     config = BrowserLauncherConfig(config_path)
@@ -50,6 +52,7 @@ def test_get_browser_config_returns_browserconfig(tmp_path):
     assert browser_config.extra_options == {"foo": "bar"}
 
 
+@pytest.mark.unit
 def test_get_console_logging_defaults_to_false(tmp_path):
     config_dict = dict(default_config)
     config_dict["logging"] = {}  # Remove console_logging
@@ -58,6 +61,7 @@ def test_get_console_logging_defaults_to_false(tmp_path):
     assert config.get_console_logging() is False
 
 
+@pytest.mark.unit
 def test_get_logging_level_defaults_to_warning(tmp_path):
     config_dict = dict(default_config)
     config_dict["logging"] = {"default_log_level": "WARNING"}
@@ -66,11 +70,13 @@ def test_get_logging_level_defaults_to_warning(tmp_path):
     assert config.get_logging_level() == "WARNING"
 
 
+@pytest.mark.unit
 def test_missing_config_file_raises():
     with pytest.raises(FileNotFoundError):
         BrowserLauncherConfig(Path("/nonexistent/path/config.toml"))
 
 
+@pytest.mark.unit
 def test_get_browser_config_handles_missing_browser(tmp_path):
     config_path = write_config(tmp_path, default_config)
     config = BrowserLauncherConfig(config_path)

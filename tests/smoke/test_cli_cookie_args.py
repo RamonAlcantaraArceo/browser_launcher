@@ -11,6 +11,7 @@ from browser_launcher.cookies import inject_and_verify_cookies
 runner = CliRunner()
 
 
+@pytest.mark.smoke
 @pytest.mark.usefixtures("caplog")
 def test_launch_command_with_user_env_args(caplog):
     """Verify CLI accepts and passes user/env arguments."""
@@ -32,6 +33,7 @@ def test_launch_command_with_user_env_args(caplog):
     assert "user=alice" in log_output or "env=staging" in log_output
 
 
+@pytest.mark.smoke
 def test_launch_command_default_user_env():
     """Verify CLI defaults for user/env are 'default' and 'prod'."""
     result = runner.invoke(
@@ -41,6 +43,7 @@ def test_launch_command_default_user_env():
     assert result.exit_code == 0 or result.exit_code != 0  # Accept any exit for now
 
 
+@pytest.mark.smoke
 def test_inject_and_verify_cookies_signature():
     """Ensure inject_and_verify_cookies function exists and accepts correct args."""
 

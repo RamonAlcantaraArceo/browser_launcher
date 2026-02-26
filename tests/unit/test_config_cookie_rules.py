@@ -3,11 +3,13 @@
 import tempfile
 from pathlib import Path
 
+import pytest
 import toml
 
 from browser_launcher.config import BrowserLauncherConfig
 
 
+@pytest.mark.unit
 def test_get_cookie_rules_returns_rules():
     """Should return cookie rules for a valid hierarchical section."""
     # Create a temporary config file with hierarchical cookie section
@@ -45,6 +47,7 @@ def test_get_cookie_rules_returns_rules():
     tmp_path.unlink()
 
 
+@pytest.mark.unit
 def test_get_cookie_rules_empty_for_missing_section():
     """Should return empty list if section does not exist."""
     config_dict: dict = {"users": {}}

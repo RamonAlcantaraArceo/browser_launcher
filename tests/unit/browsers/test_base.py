@@ -8,6 +8,7 @@ import pytest
 from browser_launcher.browsers.base import BrowserConfig, BrowserLauncher
 
 
+@pytest.mark.unit
 class TestBrowserLauncherInterface:
     """Define the contract all browser implementations must follow."""
 
@@ -66,6 +67,7 @@ class TestBrowserLauncherInterface:
             )  # type: ignore[abstract]
 
 
+@pytest.mark.unit
 class TestBrowserConfig:
     """Test BrowserConfig data structure."""
 

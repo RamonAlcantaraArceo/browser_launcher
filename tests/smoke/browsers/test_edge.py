@@ -9,6 +9,7 @@ from browser_launcher.browsers.base import BrowserConfig, BrowserLauncher
 from browser_launcher.browsers.edge import EdgeLauncher
 
 
+@pytest.mark.smoke
 class TestEdgeBrowserName:
     """Test suite for EdgeLauncher implementation."""
 

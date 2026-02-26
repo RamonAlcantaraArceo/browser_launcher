@@ -84,3 +84,9 @@ warn_return_any = false
 # This one is a catch-all flag for the rest of strict checks that are technically
 # correct but may not be practical
 extra_checks = false
+
+[tool.pytest.ini_options]
+markers = [
+  "unit: fast tests that do not launch a browser",
+  "smoke: launches a browser and performs minimal checks",
+]

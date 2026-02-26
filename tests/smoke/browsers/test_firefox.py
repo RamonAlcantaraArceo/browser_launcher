@@ -10,6 +10,7 @@ from browser_launcher.browsers.base import BrowserConfig, BrowserLauncher
 from browser_launcher.browsers.firefox import FirefoxLauncher
 
 
+@pytest.mark.smoke
 class TestFirefoxLauncher:
     """Test suite for FirefoxLauncher implementation."""
 

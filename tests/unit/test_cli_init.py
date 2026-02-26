@@ -2,12 +2,14 @@ import tempfile
 import unittest.mock
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from browser_launcher import __version__
 from browser_launcher.cli import create_config_template, get_home_directory
 
 
+@pytest.mark.unit
 def test_get_home_directory():
     """Test that get_home_directory returns the correct path."""
     home_dir = get_home_directory()
@@ -15,6 +17,7 @@ def test_get_home_directory():
     assert home_dir == expected
 
 
+@pytest.mark.unit
 def test_get_console_logging_setting_true_false(monkeypatch):
     # Patch config reading to return True and False for console_logging
     from browser_launcher import cli
@@ -25,6 +28,7 @@ def test_get_console_logging_setting_true_false(monkeypatch):
     assert cli.get_console_logging_setting() is True
 
 
+@pytest.mark.unit
 def test_create_config_template():
     """Test that config template is created correctly."""
     config_content = create_config_template()
@@ -35,6 +39,7 @@ def test_create_config_template():
     assert "[browsers]" in config_content
 
 
+@pytest.mark.unit
 def test_init_creates_directory_and_files():
     """Test that init command creates directory and config file."""
     import importlib
@@ -77,6 +82,7 @@ def test_init_creates_directory_and_files():
             assert logs_dir.exists() and logs_dir.is_dir()
 
 
+@pytest.mark.unit
 def test_init_skips_existing_directory():
     """Test that init command skips when directory already exists."""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -99,6 +105,7 @@ def test_init_skips_existing_directory():
             assert "already exists" in result2.output
 
 
+@pytest.mark.unit
 def test_init_permission_error(monkeypatch):
     import tempfile
     import unittest.mock
@@ -126,6 +133,7 @@ def test_init_permission_error(monkeypatch):
             assert "Error:" in result.output
 
 
+@pytest.mark.unit
 def test_init_general_exception(monkeypatch):
     import tempfile
     import unittest.mock
@@ -153,11 +161,13 @@ def test_init_general_exception(monkeypatch):
             assert "Error:" in result.output
 
 
+@pytest.mark.unit
 def test_version():
     """Test that version is correctly defined."""
     assert __version__ == "0.1.0"
 
 
+@pytest.mark.unit
 def test_clean_removes_directory_and_files():
     """Test that clean command removes directory and all its contents."""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -186,6 +196,7 @@ def test_clean_removes_directory_and_files():
             assert not home_dir.exists()
 
 
+@pytest.mark.unit
 def test_clean_handles_nonexistent_directory():
     """Test that clean command handles non-existent directory gracefully."""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -204,6 +215,7 @@ def test_clean_handles_nonexistent_directory():
             assert "Nothing to clean up" in output
 
 
+@pytest.mark.unit
 def test_init_runtime_error_logger(monkeypatch):
     import tempfile
     import unittest.mock

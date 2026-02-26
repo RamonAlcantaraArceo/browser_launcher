@@ -20,6 +20,7 @@ from browser_launcher.screenshot import IDGenerator, _capture_screenshot
 class TestIDGenerator:
     """Test suite for the IDGenerator class."""
 
+    @pytest.mark.unit
     def test_init_default_values(self) -> None:
         """Test IDGenerator initialization with default values."""
         generator = IDGenerator()
@@ -28,28 +29,33 @@ class TestIDGenerator:
         assert generator.directory == Path.home() / "Downloads"
         assert len(generator.session_uuid) == 5
 
+    @pytest.mark.unit
     def test_init_custom_prefix(self) -> None:
         """Test IDGenerator initialization with custom prefix."""
         generator = IDGenerator(prefix="custom")
         assert generator.prefix == "custom"
 
+    @pytest.mark.unit
     def test_init_custom_directory(self, tmp_path: Path) -> None:
         """Test IDGenerator initialization with custom directory."""
         generator = IDGenerator(directory=str(tmp_path))
         assert generator.directory == tmp_path
 
+    @pytest.mark.unit
     def test_init_tilde_expansion(self, monkeypatch) -> None:
         """Test that tilde (~) is expanded to home directory."""
         generator = IDGenerator(directory="~/custom")
         expected = Path.home() / "custom"
         assert generator.directory == expected
 
+    @pytest.mark.unit
     def test_generate_returns_path(self) -> None:
         """Test that generate() returns a Path object."""
         generator = IDGenerator()
         result = generator.generate()
         assert isinstance(result, Path)
 
+    @pytest.mark.unit
     def test_generate_increments_counter(self) -> None:
         """Test that counter increments with each generate() call."""
         generator = IDGenerator()
@@ -59,6 +65,7 @@ class TestIDGenerator:
         generator.generate()
         assert generator.counter == 2
 
+    @pytest.mark.unit
     def test_generate_filename_format(self, tmp_path: Path) -> None:
         """Test that generated filename follows the correct format."""
         generator = IDGenerator(prefix="snap", directory=str(tmp_path))
@@ -84,12 +91,14 @@ class TestIDGenerator:
         assert name_parts[2].startswith("snap")
         assert name_parts[2][4:] == "1"
 
+    @pytest.mark.unit
     def test_generate_uses_correct_directory(self, tmp_path: Path) -> None:
         """Test that generated path is in the specified directory."""
         generator = IDGenerator(directory=str(tmp_path))
         path = generator.generate()
         assert path.parent == tmp_path
 
+    @pytest.mark.unit
     def test_generate_multiple_calls_have_different_counters(
         self, tmp_path: Path
     ) -> None:
@@ -103,6 +112,7 @@ class TestIDGenerator:
         assert path2.name != path3.name
         assert path1.name != path3.name
 
+    @pytest.mark.unit
     def test_generate_multiple_calls_have_same_session_uuid(
         self, tmp_path: Path
     ) -> None:
@@ -121,6 +131,7 @@ class TestIDGenerator:
 class TestCaptureScreenshot:
     """Test suite for the _capture_screenshot function."""
 
+    @pytest.mark.unit
     def test_capture_screenshot_chrome_driver(self, tmp_path: Path) -> None:
         """Test screenshot capture with Chrome WebDriver."""
         screenshot_path = tmp_path / "screenshot.png"
@@ -149,6 +160,7 @@ class TestCaptureScreenshot:
         # Verify execute_cdp_cmd was called
         assert mock_driver.execute_cdp_cmd.called
 
+    @pytest.mark.unit
     def test_capture_screenshot_edge_driver(self, tmp_path: Path) -> None:
         """Test screenshot capture with Edge WebDriver."""
         screenshot_path = tmp_path / "screenshot.png"
@@ -176,6 +188,7 @@ class TestCaptureScreenshot:
 
         assert mock_driver.execute_cdp_cmd.called
 
+    @pytest.mark.unit
     def test_capture_screenshot_firefox_driver(self, tmp_path: Path) -> None:
         """Test screenshot capture with Firefox WebDriver."""
         screenshot_path = tmp_path / "screenshot.png"
@@ -189,6 +202,7 @@ class TestCaptureScreenshot:
             str(screenshot_path)
         )
 
+    @pytest.mark.unit
     def test_capture_screenshot_safari_driver(self, tmp_path: Path) -> None:
         """
         Test screenshot capture with Safari WebDriver (fallback to
@@ -203,6 +217,7 @@ class TestCaptureScreenshot:
         # Verify fallback method was called
         mock_driver.save_screenshot.assert_called_once_with(str(screenshot_path))
 
+    @pytest.mark.unit
     def test_capture_screenshot_delay_parameter(self, tmp_path: Path) -> None:
         """Test that the delay parameter is passed to sleep()."""
         screenshot_path = tmp_path / "screenshot.png"
@@ -214,6 +229,7 @@ class TestCaptureScreenshot:
         # Verify sleep was called with the correct delay
         mock_sleep.assert_called_with(2.5)
 
+    @pytest.mark.unit
     def test_capture_screenshot_default_delay(self, tmp_path: Path) -> None:
         """Test that the default delay is 0.5 seconds."""
         screenshot_path = tmp_path / "screenshot.png"
@@ -227,6 +243,7 @@ class TestCaptureScreenshot:
         # Check first call with default delay
         assert mock_sleep.call_args_list[0][0][0] == 0.5
 
+    @pytest.mark.unit
     def test_capture_screenshot_chrome_fallback_on_metrics_none(
         self, tmp_path: Path, caplog
     ) -> None:
@@ -251,6 +268,7 @@ class TestCaptureScreenshot:
         # Verify save_screenshot was called as fallback
         mock_driver.save_screenshot.assert_called()
 
+    @pytest.mark.unit
     def test_capture_screenshot_invalid_session_exception(self, tmp_path: Path) -> None:
         """Test that InvalidSessionIdException is re-raised."""
         screenshot_path = tmp_path / "screenshot.png"
@@ -263,6 +281,7 @@ class TestCaptureScreenshot:
             with pytest.raises(InvalidSessionIdException):
                 _capture_screenshot(screenshot_path, mock_driver)
 
+    @pytest.mark.unit
     def test_capture_screenshot_no_such_window_exception(self, tmp_path: Path) -> None:
         """Test that NoSuchWindowException is re-raised."""
         screenshot_path = tmp_path / "screenshot.png"
@@ -275,6 +294,7 @@ class TestCaptureScreenshot:
             with pytest.raises(NoSuchWindowException):
                 _capture_screenshot(screenshot_path, mock_driver)
 
+    @pytest.mark.unit
     def test_capture_screenshot_generic_exception(self, tmp_path: Path) -> None:
         """Test that generic exceptions are re-raised."""
         screenshot_path = tmp_path / "screenshot.png"
@@ -285,6 +305,7 @@ class TestCaptureScreenshot:
             with pytest.raises(RuntimeError):
                 _capture_screenshot(screenshot_path, mock_driver)
 
+    @pytest.mark.unit
     def test_capture_screenshot_safe_window_invalid_session_exception(
         self, tmp_path: Path
     ) -> None:
@@ -301,6 +322,7 @@ class TestCaptureScreenshot:
             with pytest.raises(InvalidSessionIdException):
                 _capture_screenshot(screenshot_path, mock_driver)
 
+    @pytest.mark.unit
     def test_capture_screenshot_with_extra_height_kwarg(self, tmp_path: Path) -> None:
         """Test that extra_height kwarg is passed to full() screenshot method."""
         screenshot_path = tmp_path / "screenshot.png"
@@ -329,6 +351,7 @@ class TestCaptureScreenshot:
         # Should successfully handle the extra_height parameter
         assert mock_driver.execute_cdp_cmd.called
 
+    @pytest.mark.unit
     def test_capture_screenshot_with_extra_width_kwarg(self, tmp_path: Path) -> None:
         """Test that extra_width kwarg is passed to full() screenshot method."""
         screenshot_path = tmp_path / "screenshot.png"
@@ -364,6 +387,7 @@ class TestCaptureScreenshot:
             webdriver.Edge,
         ],
     )
+    @pytest.mark.unit
     def test_capture_screenshot_cdp_browsers(self, tmp_path: Path, driver_spec) -> None:
         """Test that Chrome and Edge use CDP commands for screenshot."""
         screenshot_path = tmp_path / "screenshot.png"
@@ -392,6 +416,7 @@ class TestCaptureScreenshot:
         # Verify execute_cdp_cmd was called (uses CDP for Chrome and Edge)
         assert mock_driver.execute_cdp_cmd.called
 
+    @pytest.mark.unit
     def test_capture_screenshot_chrome_full_path_success(self, tmp_path: Path) -> None:
         """Test Chrome screenshot capture with successful full-page method."""
         screenshot_path = tmp_path / "screenshot.png"
@@ -436,6 +461,7 @@ class TestCaptureScreenshot:
         # Verify that execute_cdp_cmd was called for full-page screenshot
         assert mock_driver.execute_cdp_cmd.called
 
+    @pytest.mark.unit
     def test_capture_screenshot_safe_window_prints_on_invalid_session(
         self, tmp_path: Path, caplog
     ) -> None:
@@ -458,6 +484,7 @@ class TestCaptureScreenshot:
         assert "Falling back" in caplog.text
         assert "InvalidSessionIdException" in caplog.text
 
+    @pytest.mark.unit
     def test_capture_screenshot_safe_window_prints_on_generic_exception(
         self, tmp_path: Path, caplog
     ) -> None:
@@ -479,6 +506,7 @@ class TestCaptureScreenshot:
         # Verify unexpected exception message was logged
         assert "Unexpected" in caplog.text
 
+    @pytest.mark.unit
     def test_capture_screenshot_window_function_called_on_safari(
         self, tmp_path: Path
     ) -> None:

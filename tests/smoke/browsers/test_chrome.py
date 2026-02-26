@@ -9,6 +9,7 @@ from browser_launcher.browsers.base import BrowserConfig, BrowserLauncher
 from browser_launcher.browsers.chrome import ChromeLauncher
 
 
+@pytest.mark.smoke
 class TestChromeBrowserName:
     """Test suite for ChromeLauncher implementation."""
 

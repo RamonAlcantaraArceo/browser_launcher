@@ -70,6 +70,7 @@ from browser_launcher.browsers.safari import SafariLauncher
         ),
     ],
 )
+@pytest.mark.unit
 def test_launcher_instantiation_and_args(Launcher, browser_name, config, headless_flag):
     launcher = Launcher(config, mock.Mock())
     assert launcher is not None

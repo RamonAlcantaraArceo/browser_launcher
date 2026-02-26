@@ -9,6 +9,7 @@ from browser_launcher.browsers.base import BrowserConfig, BrowserLauncher
 from browser_launcher.browsers.safari import SafariLauncher
 
 
+@pytest.mark.smoke
 class TestSafariBrowserName:
     """Test suite for SafariLauncher implementation."""
 

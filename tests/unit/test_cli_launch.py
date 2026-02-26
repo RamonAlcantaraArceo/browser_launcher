@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, PropertyMock
 
+import pytest
 from typer.testing import CliRunner
 
 from browser_launcher.browsers.base import BrowserConfig
@@ -8,6 +9,7 @@ from browser_launcher.cli import app
 runner = CliRunner()
 
 
+@pytest.mark.unit
 def test_launch_success(monkeypatch):
     # Mock config loader
     mock_config = MagicMock()
@@ -55,6 +57,7 @@ def test_launch_success(monkeypatch):
     mock_bl.driver.close.assert_called()
 
 
+@pytest.mark.unit
 def test_launch_with_url_and_browser(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -98,6 +101,7 @@ def test_launch_with_url_and_browser(monkeypatch):
     mock_bl.driver.close.assert_called()
 
 
+@pytest.mark.unit
 def test_launch_with_headless(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -140,6 +144,7 @@ def test_launch_with_headless(monkeypatch):
     mock_bl.driver.close.assert_called()
 
 
+@pytest.mark.unit
 def test_launch_with_verbose_and_debug(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -184,6 +189,7 @@ def test_launch_with_verbose_and_debug(monkeypatch):
     )
 
 
+@pytest.mark.unit
 def test_launch_config_file_not_found(monkeypatch):
     mock_logger = MagicMock(info=MagicMock(), error=MagicMock())
     monkeypatch.setattr(
@@ -205,6 +211,7 @@ def test_launch_config_file_not_found(monkeypatch):
     mock_logger.error.assert_called()
 
 
+@pytest.mark.unit
 def test_launch_unsupported_browser(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "opera"
@@ -233,6 +240,7 @@ def test_launch_unsupported_browser(monkeypatch):
     mock_logger.error.assert_called()
 
 
+@pytest.mark.unit
 def test_launch_browser_config_load_failure(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -260,6 +268,7 @@ def test_launch_browser_config_load_failure(monkeypatch):
     mock_logger.error.assert_called()
 
 
+@pytest.mark.unit
 def test_launch_browser_instantiation_failure(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -296,6 +305,7 @@ def test_launch_browser_instantiation_failure(monkeypatch):
     mock_logger.error.assert_called()
 
 
+@pytest.mark.unit
 def test_launch_browser_launch_failure(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -335,6 +345,7 @@ def test_launch_browser_launch_failure(monkeypatch):
     mock_logger.error.assert_called()
 
 
+@pytest.mark.unit
 def test_launch_session_gone_bad(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -378,6 +389,7 @@ def test_launch_session_gone_bad(monkeypatch):
     mock_bl.driver.close.assert_called()
 
 
+@pytest.mark.unit
 def test_launch_eoferror(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -419,6 +431,7 @@ def test_launch_eoferror(monkeypatch):
     mock_bl.driver.close.assert_called()
 
 
+@pytest.mark.unit
 def test_launch_driver_close_exception(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -459,6 +472,7 @@ def test_launch_driver_close_exception(monkeypatch):
     mock_bl.driver.close.assert_called()
 
 
+@pytest.mark.unit
 def test_launch_console_logging_config(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -503,6 +517,7 @@ def test_launch_console_logging_config(monkeypatch):
         mock_bl.driver.close.assert_called()
 
 
+@pytest.mark.unit
 def test_launch_logger_not_initialized(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -536,6 +551,7 @@ def test_launch_logger_not_initialized(monkeypatch):
     assert "Logger was not initialized correctly." in result.output
 
 
+@pytest.mark.unit
 def test_launch_with_locale(monkeypatch):
     """Test that the locale parameter is correctly set on the browser config."""
     mock_config = MagicMock()
@@ -588,6 +604,7 @@ def test_launch_with_locale(monkeypatch):
     mock_bl.driver.close.assert_called()
 
 
+@pytest.mark.unit
 def test_launch_with_default_locale(monkeypatch):
     """Test that the default locale is used when no locale parameter is provided."""
     mock_config = MagicMock()
