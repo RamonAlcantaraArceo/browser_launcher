@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `--browser` option to select specific browser
   - `--headless` mode for headless browser execution
   - `--user` option for user-specific cookie profiles (default: 'default')
+  - `--locale` option to set browser locale/language (default: 'en-US')
   - `--env` option for environment-specific configuration (default: 'prod')
   - `--verbose` and `--debug` flags for operational logging
 
