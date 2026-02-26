@@ -43,9 +43,9 @@ def test_get_browser_config_returns_browserconfig(tmp_path):
     config_path = write_config(tmp_path, default_config)
     config = BrowserLauncherConfig(config_path)
     browser_config = config.get_browser_config("chrome")
-    assert browser_config.binary_path == "/usr/bin/google-chrome"
+    assert browser_config.binary_path == Path("/usr/bin/google-chrome")
     assert browser_config.headless is False
-    assert browser_config.user_data_dir == "/tmp/profile"
+    assert browser_config.user_data_dir == Path("/tmp/profile")
     assert browser_config.custom_flags == ["--flag1"]
     assert browser_config.extra_options == {"foo": "bar"}
 

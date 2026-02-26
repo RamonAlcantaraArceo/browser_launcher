@@ -10,6 +10,10 @@ from urllib.parse import urlparse
 
 import tomli_w
 import typer
+from r3a_logger.logger import (  # type: ignore[import-untyped]
+    get_current_logger,
+    initialize_logging,
+)
 from rich.console import Console
 from rich.panel import Panel
 
@@ -19,10 +23,6 @@ from browser_launcher.cookies import (
     CookieConfig,
     inject_and_verify_cookies,
     read_cookies_from_browser,
-)
-from browser_launcher.logger import (
-    get_current_logger,
-    initialize_logging,
 )
 from browser_launcher.screenshot import IDGenerator, _capture_screenshot
 from browser_launcher.utils import get_command_context
@@ -70,6 +70,43 @@ def get_logging_level_setting() -> str:
         return "WARNING"
 
 
+def _setup_logging(
+    verbose: bool = False,
+    debug: bool = False,
+    console_logging: bool = False,
+    log_level: Optional[str] = None,
+) -> None:
+    """Adapter function to bridge old and new logging signatures.
+
+    Args:
+        verbose: Enable verbose logging (INFO level)
+        debug: Enable debug logging (DEBUG level)
+        console_logging: Enable console logging
+        log_level: Optional explicit log level (overrides verbose/debug)
+    """
+    # Determine log level
+    if log_level:
+        pass  # Use provided log_level
+    elif debug:
+        log_level = "DEBUG"
+    elif verbose:
+        log_level = "INFO"
+    else:
+        log_level = "WARNING"
+
+    # Get log directory
+    log_dir = get_log_directory()
+
+    # Call r3a_logger's initialize_logging with new signature
+    initialize_logging(
+        log_dir=log_dir,
+        log_level=log_level,
+        console_logging=console_logging,
+        logger_name="browser_launcher",
+        log_file_name=None,
+    )
+
+
 @app.command()
 def init(
     force: bool = typer.Option(
@@ -115,9 +152,7 @@ def init(
         console_logging = get_console_logging_setting()
 
         # Initialize logging first
-        initialize_logging(
-            verbose=verbose, debug=debug, console_logging=console_logging
-        )
+        _setup_logging(verbose=verbose, debug=debug, console_logging=console_logging)
         logger = get_current_logger()
         if logger is None:
             raise RuntimeError("Logger was not initialized correctly.")
@@ -226,7 +261,7 @@ def launch(  # noqa: C901
     console_logging = get_console_logging_setting()
     logging_level = get_logging_level_setting()
     # Initialize logging first
-    initialize_logging(
+    _setup_logging(
         verbose=verbose,
         debug=debug,
         console_logging=console_logging,
@@ -385,8 +420,8 @@ def launch(  # noqa: C901
                             ].values()
                         }
                     )
-                    browser_cookies = []
-                    target_browser_cookies = []
+                    browser_cookies: list[dict] = []
+                    target_browser_cookies: list[dict] = []
                     for target_domain in target_domains:
                         browser_cookies.extend(
                             read_cookies_from_browser(bl.driver, target_domain)
