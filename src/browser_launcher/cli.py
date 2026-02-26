@@ -385,7 +385,7 @@ def launch(  # noqa: C901
     try:
         old_settings = termios.tcgetattr(sys.stdin)
         tty.setcbreak(sys.stdin.fileno())
-    except (AttributeError, termios.error, OSError):
+    except AttributeError, termios.error, OSError:
         # If we can't set terminal mode (e.g., in tests or non-TTY), continue anyway
         pass
 
@@ -501,7 +501,7 @@ def launch(  # noqa: C901
         if old_settings is not None:
             try:
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
-            except (termios.error, OSError):
+            except termios.error, OSError:
                 pass
         try:
             bl.driver.close()

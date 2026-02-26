@@ -53,8 +53,16 @@ class BrowserLauncherConfig:
     ) -> BrowserConfig:
         browsers = self.config_data.get("browsers", {})
         browser_section = browsers.get(browser_name, {})
-        binary_path = Path(browser_section.get("binary_path")) if browser_section.get("binary_path") else None
-        user_data_dir = Path(browser_section.get("user_data_dir")) if browser_section.get("user_data_dir") else None
+        binary_path = (
+            Path(browser_section.get("binary_path"))
+            if browser_section.get("binary_path")
+            else None
+        )
+        user_data_dir = (
+            Path(browser_section.get("user_data_dir"))
+            if browser_section.get("user_data_dir")
+            else None
+        )
         custom_flags = browser_section.get("custom_flags")
         extra_options = browser_section.get("extra_options", {})
         return BrowserConfig(
