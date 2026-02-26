@@ -108,6 +108,37 @@ jobs:
     - name: Run Tests with Coverage
       run: poetry run pytest -m ${{ matrix.type-test }} --cov=src --cov-report=xml --cov-report=term-missing --junitxml=junit.xml -o junit_family=legacy
       
+    - name: Collect WebDriver Logs
+      if: ${{ always() && matrix.type-test == 'smoke' }}
+      run: |
+        echo "=== Collecting WebDriver verbose logs ==="
+        ls -la *.log 2>/dev/null || echo "No log files found"
+        if [ -f chromedriver.log ]; then
+          echo "=== ChromeDriver Log ==="
+          cat chromedriver.log
+          echo ""
+        fi
+        if [ -f edgedriver.log ]; then
+          echo "=== EdgeDriver Log ==="
+          cat edgedriver.log
+          echo ""
+        fi
+        if [ -f geckodriver.log ]; then
+          echo "=== GeckoDriver Log ==="
+          cat geckodriver.log
+          echo ""
+        fi
+      
+    - name: Upload WebDriver Logs
+      if: ${{ always() && matrix.type-test == 'smoke' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: webdriver-logs-python-${{ matrix.python-version }}
+        path: |
+          *.log
+        retention-days: 7
+        if-no-files-found: ignore
+      
     - name: Upload test results to Codecov
       if: ${{ !cancelled() }}
       uses: codecov/codecov-action@v5
