@@ -3,6 +3,8 @@
 import json
 import logging
 import sys
+import termios
+import tty
 from importlib import resources
 from pathlib import Path
 from typing import Optional
@@ -378,8 +380,17 @@ def launch(  # noqa: C901
     gen = IDGenerator()
 
     # Wait for it to close
+    # Try to set terminal to unbuffered mode for immediate character reading
+    old_settings = None
     try:
-        console.print("Press Ctrl+D (or Ctrl+Z on Windows) to exit.")
+        old_settings = termios.tcgetattr(sys.stdin)
+        tty.setcbreak(sys.stdin.fileno())
+    except (AttributeError, termios.error, OSError):
+        # If we can't set terminal mode (e.g., in tests or non-TTY), continue anyway
+        pass
+
+    try:
+        console.print("Press Ctrl+D to exit.")
         console.print("Press 'Enter' to capture a screenshot.")
         console.print("Press 's' to save/cache cookies for this session.")
         while True:
@@ -389,9 +400,9 @@ def launch(  # noqa: C901
                     "capture screenshot"
                 )
             char = sys.stdin.read(1)
-            if not char:
+            if not char or char == "\x04":  # EOF or Ctrl+D
                 break
-            elif char.lower() == "\n":
+            elif char.lower() == "\n" or char.lower() == "\r":
                 try:
                     screenshot_name = gen.generate()
                     _capture_screenshot(
@@ -486,6 +497,12 @@ def launch(  # noqa: C901
     except EOFError:
         console.print("\nExiting...")
     finally:
+        # Restore original terminal settings if they were saved
+        if old_settings is not None:
+            try:
+                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+            except (termios.error, OSError):
+                pass
         try:
             bl.driver.close()
         except Exception:
