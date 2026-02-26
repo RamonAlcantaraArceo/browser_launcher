@@ -1,6 +1,7 @@
 """Unit tests for Firefox browser launcher implementation."""
 
 # import subprocess  # No longer needed with WebDriver-based launcher
+import os
 from pathlib import Path
 from unittest import mock
 
@@ -17,9 +18,11 @@ class TestFirefoxLauncher:
     @pytest.fixture
     def firefox_config(self):
         """Create a basic Firefox configuration for testing."""
+        # Use headless mode in CI, allow headfull locally for debugging
+        is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
         return BrowserConfig(
             binary_path=Path("/usr/bin/firefox"),
-            headless=False,
+            headless=is_ci,  # Dynamic based on environment
             user_data_dir=None,
             custom_flags=[],
         )

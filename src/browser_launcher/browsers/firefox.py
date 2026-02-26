@@ -1,5 +1,7 @@
 """Firefox browser launcher implementation."""
 
+import os
+
 from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.firefox.options import Options
@@ -21,8 +23,14 @@ class FirefoxLauncher(BrowserLauncher):
         self.logger.debug(f"Launching Firefox with url: {url}")
         try:
             firefox_options = Options()
-            if self.config and self.config.headless:
+
+            # Enable headless mode if configured or running in CI
+            is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+            should_use_headless = (self.config and self.config.headless) or is_ci
+
+            if should_use_headless:
                 firefox_options.add_argument("-headless")
+                self.logger.debug("Running Firefox in headless mode")
 
             if self.config and self.config.locale:
                 firefox_options.set_preference(
