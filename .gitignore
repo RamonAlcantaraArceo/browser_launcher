@@ -1,3 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+dist/
+build/
+*.egg-info
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -205,3 +212,5 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+junit.xml

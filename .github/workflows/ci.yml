@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint (Python 3.14)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    timeout-minutes: 15
+    continue-on-error: true
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python 3.14
+      id: setup-python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.14"
+        
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: '2.2.1'
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+        installer-parallel: true
+        
+    - name: Load cached venv
+      id: cached-poetry-dependencies
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: venv-lint-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+        
+    - name: Install dependencies
+      if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+      run: |
+        poetry install --with dev --verbose
+        
+    - name: Verify installation
+      run: |
+        poetry run python --version
+        poetry run ruff --version
+      
+    - name: Run Ruff Format (check only)
+      run: poetry run ruff format --check
+      
+    - name: Run Ruff Check
+      run: poetry run ruff check src/ tests/
+      
+    - name: Run Mypy
+      run: poetry run mypy src/ tests/
+
+  test:
+    name: Test ${{ matrix.type-test }} (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: ${{ matrix.python-version == '3.14' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        type-test: ["unit", "smoke"]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python ${{ matrix.python-version }}
+      id: setup-python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: '2.2.1'
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+        installer-parallel: true
+        
+    - name: Load cached venv
+      id: cached-poetry-dependencies
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: venv-test-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+        
+    - name: Install dependencies
+      if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+      run: |
+        poetry install --with dev --verbose
+        
+    - name: Verify installation
+      run: |
+        poetry run python --version
+        poetry run pytest --version
+      
+    - name: Run Tests with Coverage
+      run: poetry run pytest -m ${{ matrix.type-test }} --cov=src --cov-report=xml --cov-report=term-missing --junitxml=junit.xml -o junit_family=legacy
+      
+    - name: Collect WebDriver Logs
+      if: ${{ always() && matrix.type-test == 'smoke' }}
+      run: |
+        echo "=== Collecting WebDriver verbose logs ==="
+        ls -la *.log 2>/dev/null || echo "No log files found"
+        if [ -f chromedriver.log ]; then
+          echo "=== ChromeDriver Log ==="
+          cat chromedriver.log
+          echo ""
+        fi
+        if [ -f edgedriver.log ]; then
+          echo "=== EdgeDriver Log ==="
+          cat edgedriver.log
+          echo ""
+        fi
+        if [ -f geckodriver.log ]; then
+          echo "=== GeckoDriver Log ==="
+          cat geckodriver.log
+          echo ""
+        fi
+      
+    - name: Upload WebDriver Logs
+      if: ${{ always() && matrix.type-test == 'smoke' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: webdriver-logs-python-${{ matrix.python-version }}
+        path: |
+          *.log
+        retention-days: 7
+        if-no-files-found: ignore
+      
+    - name: Upload test results to Codecov
+      if: ${{ !cancelled() }}
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./junit.xml
+        flags: ${{ matrix.type-test }},python-${{ matrix.python-version }}
+        name: codecov-tests-python-${{ matrix.python-version }}
+        report_type: test_results
+        verbose: true
+        fail_ci_if_error: false
+      
+    - name: Upload coverage to Codecov
+      if: ${{ !cancelled() && matrix.python-version == '3.14' }}
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage.xml
+        flags: ${{ matrix.type-test }},coverage
+        name: codecov-coverage-python-${{ matrix.python-version }}
+        report_type: coverage
+        verbose: true
+        fail_ci_if_error: false

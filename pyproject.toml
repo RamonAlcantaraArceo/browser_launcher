@@ -1,0 +1,93 @@
+[tool.poetry]
+name = "browser_launcher"
+version = "0.1.0"
+description = "A small Python project to launch browsers (placeholder)."
+authors = ["Ramon Alcantara Arceo <you@example.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "browser_launcher", from = "src" }]
+
+# Include asset files
+include = [
+	{ path = "src/browser_launcher/assets/default_config.toml" }
+]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+typer = "^0.20.0"
+rich = "^14.2.0"
+selenium = "^4.40.0"
+toml = "^0.10.2"
+types-toml = "^0.10.8.20240310"
+tomli-w = "^1.2.0"
+r3a-minikit = {url = "https://github.com/RamonAlcantaraArceo/r3a-minikit/releases/download/v0.0.1/r3a_minikit-0.0.1-py3-none-any.whl"}
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.0"
+pytest-cov = "^7.0.0"
+ruff = "^0.15.0"
+mypy = "^1.19.1"
+tox = "^4.46.3"
+
+[tool.poetry.scripts]
+browser-launcher = "browser_launcher.__main__:main"
+
+[build-system]
+requires = ["poetry-core>=1.8"]
+build-backend = "poetry.core.masonry.api"
+
+# Ruff configuration
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "C", "I"]
+ignore = []
+
+# Mypy configuration
+[tool.mypy]
+python_version = "3.14"
+strict = false
+
+ignore_missing_imports = false
+show_error_codes = true
+warn_unreachable = true
+
+# Start off with these
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+# Getting this passing should be easy
+strict_equality = true
+
+# Strongly recommend enabling this one as soon as you can
+check_untyped_defs = true
+
+# These shouldn't be too much additional work, but may be tricky to
+# get passing if you use a lot of untyped libraries
+disallow_subclassing_any = false
+disallow_untyped_decorators = false
+disallow_any_generics = false
+
+# These next few are various gradations of forcing use of type annotations
+disallow_untyped_calls = false
+disallow_incomplete_defs = false
+disallow_untyped_defs = false
+
+# This one isn't too hard to get passing, but return on investment is lower
+no_implicit_reexport = false
+
+# This one can be tricky to get passing if you use a lot of untyped libraries
+warn_return_any = false
+
+# This one is a catch-all flag for the rest of strict checks that are technically
+# correct but may not be practical
+extra_checks = false
+
+[tool.pytest.ini_options]
+markers = [
+  "unit: fast tests that do not launch a browser",
+  "smoke: launches a browser and performs minimal checks",
+]

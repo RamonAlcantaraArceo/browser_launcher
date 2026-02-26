@@ -1,0 +1,33 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Ruff Format",
+            "type": "shell",
+            "command": "poetry run ruff format",
+            "group": "build"
+        },
+        {
+            "label": "Ruff Check",
+            "type": "shell",
+            "command": "poetry run ruff check src/ tests/",
+            "group": "build"
+        },
+        {
+            "label": "Mypy",
+            "type": "shell",
+            "command": "poetry run mypy src/ tests/",
+            "group": "build"
+        },
+        {
+            "label": "Run All Checks",
+            "dependsOn": [
+                "Ruff Format",
+                "Ruff Check",
+                "Mypy"
+            ],
+            "group": "build",
+            "dependsOrder": "sequence"
+        }
+    ]
+}
