@@ -42,7 +42,7 @@ def test_init_creates_directory_and_files():
 
     with tempfile.TemporaryDirectory() as temp_dir:
         real_asset = (
-            Path(__file__).parent.parent
+            Path(__file__).parent.parent.parent
             / "src"
             / "browser_launcher"
             / "assets"
