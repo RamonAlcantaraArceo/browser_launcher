@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, PropertyMock
 
 from typer.testing import CliRunner
 
+from browser_launcher.browsers.base import BrowserConfig
 from browser_launcher.cli import app
 
 runner = CliRunner()
@@ -11,7 +12,12 @@ def test_launch_success(monkeypatch):
     # Mock config loader
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
-    mock_config.get_browser_config.return_value = {"foo": "bar"}
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
     mock_config.get_default_url.return_value = "http://example.com"
 
     # Mock browser factory and browser instance
@@ -52,7 +58,12 @@ def test_launch_success(monkeypatch):
 def test_launch_with_url_and_browser(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
-    mock_config.get_browser_config.return_value = {"foo": "bar"}
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
     mock_config.get_default_url.return_value = "http://default.com"
     mock_bl = MagicMock()
     mock_bl.driver.session_id = "abc"
@@ -90,7 +101,12 @@ def test_launch_with_url_and_browser(monkeypatch):
 def test_launch_with_headless(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
-    mock_config.get_browser_config.return_value = {"foo": "bar"}
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=True,
+        user_data_dir=None,
+        custom_flags=None,
+    )
     mock_config.get_default_url.return_value = "http://example.com"
     mock_bl = MagicMock()
     mock_bl.driver.session_id = "abc"
@@ -127,7 +143,12 @@ def test_launch_with_headless(monkeypatch):
 def test_launch_with_verbose_and_debug(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
-    mock_config.get_browser_config.return_value = {"foo": "bar"}
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
     mock_config.get_default_url.return_value = "http://example.com"
     mock_bl = MagicMock()
     mock_bl.driver.session_id = "abc"
@@ -242,7 +263,12 @@ def test_launch_browser_config_load_failure(monkeypatch):
 def test_launch_browser_instantiation_failure(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
-    mock_config.get_browser_config.return_value = {"foo": "bar"}
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
     mock_config.get_default_url.return_value = "http://example.com"
     mock_logger = MagicMock(info=MagicMock(), error=MagicMock())
     monkeypatch.setattr(
@@ -273,7 +299,12 @@ def test_launch_browser_instantiation_failure(monkeypatch):
 def test_launch_browser_launch_failure(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
-    mock_config.get_browser_config.return_value = {"foo": "bar"}
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
     mock_config.get_default_url.return_value = "http://example.com"
     mock_bl = MagicMock()
     mock_bl.driver.session_id = "abc"
@@ -307,7 +338,12 @@ def test_launch_browser_launch_failure(monkeypatch):
 def test_launch_session_gone_bad(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
-    mock_config.get_browser_config.return_value = {"foo": "bar"}
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
     mock_config.get_default_url.return_value = "http://example.com"
     mock_bl = MagicMock()
     # session_id is None on first read, then not None
@@ -345,7 +381,12 @@ def test_launch_session_gone_bad(monkeypatch):
 def test_launch_eoferror(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
-    mock_config.get_browser_config.return_value = {"foo": "bar"}
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
     mock_config.get_default_url.return_value = "http://example.com"
     mock_bl = MagicMock()
     mock_bl.driver.session_id = "abc"
@@ -381,7 +422,12 @@ def test_launch_eoferror(monkeypatch):
 def test_launch_driver_close_exception(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
-    mock_config.get_browser_config.return_value = {"foo": "bar"}
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
     mock_config.get_default_url.return_value = "http://example.com"
     mock_bl = MagicMock()
     mock_bl.driver.session_id = "abc"
@@ -416,7 +462,12 @@ def test_launch_driver_close_exception(monkeypatch):
 def test_launch_console_logging_config(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
-    mock_config.get_browser_config.return_value = {"foo": "bar"}
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
     mock_config.get_default_url.return_value = "http://example.com"
     mock_bl = MagicMock()
     mock_bl.driver.session_id = "abc"
@@ -455,7 +506,12 @@ def test_launch_console_logging_config(monkeypatch):
 def test_launch_logger_not_initialized(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
-    mock_config.get_browser_config.return_value = {"foo": "bar"}
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
     mock_config.get_default_url.return_value = "http://example.com"
     monkeypatch.setattr(
         "browser_launcher.cli.BrowserLauncherConfig", lambda: mock_config
@@ -478,3 +534,107 @@ def test_launch_logger_not_initialized(monkeypatch):
     result = runner.invoke(app, ["launch"])
     assert result.exit_code == 1
     assert "Logger was not initialized correctly." in result.output
+
+
+def test_launch_with_locale(monkeypatch):
+    """Test that the locale parameter is correctly set on the browser config."""
+    mock_config = MagicMock()
+    mock_config.get_default_browser.return_value = "chrome"
+    # Create a BrowserConfig that we can verify gets the locale set
+    browser_config = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
+    mock_config.get_browser_config.return_value = browser_config
+    mock_config.get_default_url.return_value = "http://example.com"
+
+    mock_bl = MagicMock()
+    mock_bl.driver.session_id = "abc"
+    mock_bl.driver.close = MagicMock()
+    mock_bl.launch = MagicMock()
+
+    mock_logger = MagicMock(info=MagicMock(), error=MagicMock(), debug=MagicMock())
+
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserLauncherConfig", lambda: mock_config
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.get_available_browsers", lambda: ["chrome"]
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.create", lambda *a, **kw: mock_bl
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.get_console_logging_setting", lambda: False
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
+    )
+    monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
+    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
+
+    # Test with custom locale
+    result = runner.invoke(app, ["launch", "--locale", "fr-FR"])
+    assert result.exit_code == 0
+
+    # Verify the locale was set on the browser config
+    assert browser_config.locale == "fr-FR"
+
+    # Verify the debug log was called
+    mock_logger.debug.assert_any_call("Set browser locale to: fr-FR")
+    mock_bl.launch.assert_called_once()
+    mock_bl.driver.close.assert_called()
+
+
+def test_launch_with_default_locale(monkeypatch):
+    """Test that the default locale is used when no locale parameter is provided."""
+    mock_config = MagicMock()
+    mock_config.get_default_browser.return_value = "chrome"
+    # Create a BrowserConfig that should keep its default locale
+    browser_config = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
+    mock_config.get_browser_config.return_value = browser_config
+    mock_config.get_default_url.return_value = "http://example.com"
+
+    mock_bl = MagicMock()
+    mock_bl.driver.session_id = "abc"
+    mock_bl.driver.close = MagicMock()
+    mock_bl.launch = MagicMock()
+
+    mock_logger = MagicMock(info=MagicMock(), error=MagicMock(), debug=MagicMock())
+
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserLauncherConfig", lambda: mock_config
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.get_available_browsers", lambda: ["chrome"]
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.create", lambda *a, **kw: mock_bl
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.get_console_logging_setting", lambda: False
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
+    )
+    monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
+    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
+
+    # Test without locale parameter (should use default "en-US")
+    result = runner.invoke(app, ["launch"])
+    assert result.exit_code == 0
+
+    # Verify the default locale is used
+    assert browser_config.locale == "en-US"
+
+    # Verify the debug log WAS called with the default locale
+    mock_logger.debug.assert_any_call("Set browser locale to: en-US")
+    mock_bl.launch.assert_called_once()
+    mock_bl.driver.close.assert_called()

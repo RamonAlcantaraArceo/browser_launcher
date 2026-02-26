@@ -25,7 +25,9 @@ class FirefoxLauncher(BrowserLauncher):
                 firefox_options.add_argument("-headless")
 
             if self.config and self.config.locale:
-                firefox_options.set_preference("intl.accept_languages", self.config.locale)
+                firefox_options.set_preference(
+                    "intl.accept_languages", self.config.locale
+                )
 
             driver = webdriver.Firefox(options=firefox_options)
             self._driver = driver

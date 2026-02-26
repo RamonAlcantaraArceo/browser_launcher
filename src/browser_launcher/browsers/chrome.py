@@ -29,7 +29,9 @@ class ChromeLauncher(BrowserLauncher):
                 chrome_options.add_argument("--headless")
 
             if self.config and self.config.locale:
-                chrome_options.add_experimental_option("prefs", {"intl.accept_languages": self.config.locale})
+                chrome_options.add_experimental_option(
+                    "prefs", {"intl.accept_languages": self.config.locale}
+                )
 
             if self.config and self.config.extra_options:
                 for key, value in self.config.extra_options.items():
