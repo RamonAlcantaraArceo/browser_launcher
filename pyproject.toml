@@ -13,7 +13,7 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.14"
+python = "^3.10"
 typer = "^0.20.0"
 rich = "^14.2.0"
 selenium = "^4.40.0"
@@ -27,6 +27,7 @@ pytest = "^7.0"
 pytest-cov = "^7.0.0"
 ruff = "^0.15.0"
 mypy = "^1.19.1"
+tox = "^4.46.3"
 
 [tool.poetry.scripts]
 browser-launcher = "browser_launcher.__main__:main"
@@ -38,7 +39,7 @@ build-backend = "poetry.core.masonry.api"
 # Ruff configuration
 [tool.ruff]
 line-length = 88
-target-version = "py314"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "C", "I"]
