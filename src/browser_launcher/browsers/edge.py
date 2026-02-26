@@ -17,6 +17,13 @@ class EdgeLauncher(BrowserLauncher):
             if self.config and self.config.headless:
                 edge_options.add_argument("--headless")
 
+            if self.config and self.config.locale:
+                edge_options.add_experimental_option("prefs", {"intl.accept_languages": self.config.locale})
+
+            if self.config and self.config.extra_options:
+                for key, value in self.config.extra_options.items():
+                    edge_options.add_experimental_option(key, value)
+
             driver = webdriver.Edge(options=edge_options)
             self._driver = driver
             self.safe_get_address(url)

@@ -244,6 +244,11 @@ def launch(  # noqa: C901
         "--debug",
         help="Enable comprehensive debugging logs (DEBUG level, includes verbose)",
     ),
+    locale: str = typer.Option(
+        "en-US",
+        "--locale",
+        help="Browser locale setting (default: 'en-US')",
+    ),
 ):
     """Launch a browser with specified options.
 
@@ -313,6 +318,11 @@ def launch(  # noqa: C901
         console.print(f"❌ [red]Error loading browser config:[/red] {e}")
         logger.error(f"Error loading browser config: {e}")
         sys.exit(1)
+
+    # Configure locale preferences if set
+    if locale:
+        browser_config.locale = locale
+        logger.debug(f"Set browser locale to: {locale}")
 
     # Instantiate browser launcher
     try:

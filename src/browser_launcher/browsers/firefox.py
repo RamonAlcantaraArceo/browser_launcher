@@ -21,6 +21,12 @@ class FirefoxLauncher(BrowserLauncher):
         self.logger.debug(f"Launching Firefox with url: {url}")
         try:
             firefox_options = Options()
+            if self.config and self.config.headless:
+                firefox_options.add_argument("-headless")
+
+            if self.config and self.config.locale:
+                firefox_options.set_preference("intl.accept_languages", self.config.locale)
+
             driver = webdriver.Firefox(options=firefox_options)
             self._driver = driver
             self.safe_get_address(url)

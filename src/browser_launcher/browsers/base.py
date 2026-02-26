@@ -16,6 +16,7 @@ class BrowserConfig:
     headless: bool
     user_data_dir: Optional[Path]
     custom_flags: Optional[List[str]]
+    locale: str = "en-US"
     extra_options: Dict[str, Any] = field(default_factory=dict)
 
 
