@@ -1,5 +1,6 @@
 """Tests for Safari browser implementation."""
 
+import sys
 import unittest.mock as mock
 from pathlib import Path
 
@@ -10,6 +11,9 @@ from browser_launcher.browsers.safari import SafariLauncher
 
 
 @pytest.mark.smoke
+@pytest.mark.skipif(
+    sys.platform != "darwin", reason="Safari is only available on macOS"
+)
 class TestSafariBrowserName:
     """Test suite for SafariLauncher implementation."""
 

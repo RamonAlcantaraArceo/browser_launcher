@@ -13,7 +13,7 @@ runner = CliRunner()
 
 @pytest.mark.smoke
 @pytest.mark.usefixtures("caplog")
-def test_launch_command_with_user_env_args(caplog):
+def test_launch_command_with_user_env_args(caplog, mock_browser_config):
     """Verify CLI accepts and passes user/env arguments."""
     runner.invoke(
         app,
@@ -34,7 +34,7 @@ def test_launch_command_with_user_env_args(caplog):
 
 
 @pytest.mark.smoke
-def test_launch_command_default_user_env():
+def test_launch_command_default_user_env(mock_browser_config):
     """Verify CLI defaults for user/env are 'default' and 'prod'."""
     result = runner.invoke(
         app, ["launch", "https://example.com", "--browser", "chrome"]

@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 from browser_launcher.browsers.base import BrowserConfig
@@ -23,7 +25,13 @@ class DummyLogger:
     [
         ("chrome", "ChromeLauncher"),
         ("firefox", "FirefoxLauncher"),
-        ("safari", "SafariLauncher"),
+        pytest.param(
+            "safari",
+            "SafariLauncher",
+            marks=pytest.mark.skipif(
+                sys.platform != "darwin", reason="Safari is only available on macOS"
+            ),
+        ),
         ("edge", "EdgeLauncher"),
     ],
 )

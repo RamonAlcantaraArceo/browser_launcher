@@ -1,6 +1,7 @@
 """Unified tests for all browser launcher implementations:
 Chrome, Firefox, Safari, Edge."""
 
+import sys
 from pathlib import Path
 from unittest import mock
 
@@ -42,8 +43,8 @@ from browser_launcher.browsers.safari import SafariLauncher
             ),
             "-headless",
         ),
-        # Safari (WebDriver, args always empty)
-        (
+        # Safari (WebDriver, args always empty) - only on macOS
+        pytest.param(
             SafariLauncher,
             "safari",
             BrowserConfig(
@@ -54,6 +55,9 @@ from browser_launcher.browsers.safari import SafariLauncher
                 extra_options={},
             ),
             None,
+            marks=pytest.mark.skipif(
+                sys.platform != "darwin", reason="Safari is only available on macOS"
+            ),
         ),
         # Edge (WebDriver, args always empty)
         (

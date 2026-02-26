@@ -27,10 +27,9 @@ def test_get_console_logging_setting_true_false(monkeypatch):
     def mock_init_false_console(self, config_path=None):
         self.config_data = {"logging": {"console_logging": False}}
 
-    
     def mock_init_true_console(self, config_path=None):
         self.config_data = {"logging": {"console_logging": True}}
-    
+
     monkeypatch.setattr(BrowserLauncherConfig, "__init__", mock_init_false_console)
 
     assert cli.get_console_logging_setting() is False
