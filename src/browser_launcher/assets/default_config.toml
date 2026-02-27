@@ -46,3 +46,36 @@ headless = false
 [edge]
 binary_path = ""
 headless = false
+
+# Authentication Configuration
+[auth]
+# Global authentication defaults
+timeout_seconds = 30
+retry_attempts = 3
+retry_delay_seconds = 1.0
+headless = true
+page_load_timeout = 20
+element_wait_timeout = 10
+screenshot_on_failure = false
+
+# Example module-specific configurations
+# [auth.form_auth]
+# timeout_seconds = 45
+# credentials = { username_field = "email", password_field = "password" }
+# allowed_domains = ["example.com", "test.example.com"]
+# required_cookies = ["session_id", "auth_token"]
+
+# [auth.oauth]
+# timeout_seconds = 60
+# credentials = { client_id = "your_client_id", redirect_uri = "https://localhost:8080/callback" }
+# custom_options = { popup_window = true, auto_close = true }
+
+# User and environment-specific auth configuration examples
+# [users.alice.prod.auth]
+# timeout_seconds = 45
+# screenshot_on_failure = true
+# screenshot_directory = "/tmp/auth_screenshots"
+
+# [users.alice.prod.auth.form_auth]
+# credentials = { username = "alice@company.com" }
+# allowed_domains = ["company.com", "app.company.com"]
