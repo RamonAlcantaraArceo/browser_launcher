@@ -7,7 +7,7 @@ import termios
 import tty
 from importlib import resources
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 import tomli_w
@@ -23,6 +23,7 @@ from browser_launcher.browsers.factory import BrowserFactory
 from browser_launcher.config import BrowserLauncherConfig
 from browser_launcher.cookies import (
     CookieConfig,
+    _dump_cookies_from_browser,
     inject_and_verify_cookies,
     read_cookies_from_browser,
 )
@@ -107,6 +108,116 @@ def _setup_logging(
         logger_name="browser_launcher",
         log_file_name=None,
     )
+
+
+def cache_cookies_for_session(
+    browser_controller: Any,
+    user: str,
+    env: str,
+    domain: Optional[str],
+    cookie_config_data: dict[str, Any],
+    cookie_config: Optional[CookieConfig],
+    logger: logging.Logger,
+    console: Console,
+) -> None:
+    """Cache cookies from the active browser session for a given user and environment.
+
+    This function reads cookies from the provided ``browser_controller`` for the
+    domains configured under the given ``user`` and ``env`` in
+    ``cookie_config_data``. Matching cookies are written to the cookie cache via
+    ``cookie_config.update_cookie_cache`` and the updated configuration is
+    persisted to the main ``config.toml`` file in the browser_launcher home
+    directory.
+
+    All exceptions raised while reading or persisting cookies are caught and
+    logged; errors are also printed to the console. No exceptions are propagated
+    to the caller.
+
+    Args:
+        browser_controller: An object wrapping the Selenium WebDriver instance
+            whose ``driver`` attribute is used to read cookies from the browser.
+        user: The user identifier whose cookie configuration and cache should be
+            updated.
+        env: The environment name (for example, ``"dev"``, ``"staging"`` or
+            ``"prod"``) under which cookies are organized for the user.
+        domain: The domain originally requested on the CLI. Used only for
+            informational messages when no cookies are found.
+        cookie_config_data: The full cookie configuration data structure loaded
+            from ``config.toml``, used to determine which cookies and domains to
+            target for caching.
+        cookie_config: The ``CookieConfig`` instance used to update the cookie
+            cache. If ``None``, the cache will not be updated and an error is
+            logged and printed to the console.
+        logger: The application logger used to record informational, debug, and
+            error messages during the caching process.
+        console: The Rich ``Console`` instance used to display user-facing
+            messages about the caching operation.
+
+    Returns:
+        None. Results and any errors are communicated via logging and console
+        output.
+    """
+    try:
+        user_env_cookies = cookie_config_data["users"][user][env]["cookies"]
+        target_cookies = list(user_env_cookies.keys())
+        target_domains = list({val["domain"] for val in user_env_cookies.values()})
+        browser_cookies: list[dict] = []
+        target_browser_cookies: list[dict] = []
+        for target_domain in target_domains:
+            browser_cookies.extend(
+                read_cookies_from_browser(browser_controller.driver, target_domain)
+            )
+        for cookie in browser_cookies:
+            if cookie["name"] in target_cookies and cookie["name"] not in [
+                c["name"] for c in target_browser_cookies
+            ]:
+                target_browser_cookies.append(cookie)
+
+        logger.info(
+            f"Read {len(target_browser_cookies)} cookies from browser for"
+            f" {user}/{env}:{target_domains}"
+        )
+        if target_browser_cookies:
+            if cookie_config is None:
+                logger.error("CookieConfig is not initialized, cannot update cache")
+                console.print(
+                    "❌ [red]Error:[/red] CookieConfig is not initialized, "
+                    "cannot update cache"
+                )
+                return
+            # Update cache entries for each cookie
+            for cookie in target_browser_cookies:
+                cookie_config.update_cookie_cache(
+                    user,
+                    env,
+                    user_env_cookies[cookie["name"]]["domain"],
+                    cookie["name"],
+                    cookie.get("value", ""),
+                )
+
+            # Save config back to file
+            config_file = get_home_directory() / "config.toml"
+
+            with open(config_file, "wb") as f:
+                tomli_w.dump(cookie_config.config_data, f)
+
+            console.print(
+                f"✅ Cached {len(target_browser_cookies)} cookies for "
+                f"{user}/{env}/{target_domains}"
+            )
+            logger.info(
+                f"Saved {len(target_browser_cookies)} cookies "
+                f"for {user}/{env}/{target_domains}"
+            )
+
+            users_json = json.dumps(cookie_config.config_data["users"], indent=2)
+            logger.debug(f"Cookies: {users_json}")
+        else:
+            console.print(f"⚠️ No cookies found for domain {domain}")
+            logger.debug(f"⚠️ No cookies found for domain {domain}")
+    except Exception as e:
+        console.print(f"❌ Error caching cookies: {e}")
+        logger.error(f"Error caching cookies: {e}", exc_info=True)
 
 
 @app.command()
@@ -326,7 +437,9 @@ def launch(  # noqa: C901
 
     # Instantiate browser launcher
     try:
-        bl = BrowserFactory.create(selected_browser, browser_config, logger)
+        browser_controller = BrowserFactory.create(
+            selected_browser, browser_config, logger
+        )
     except Exception as e:
         console.print(f"❌ [red]Error instantiating browser:[/red] {e}")
         logger.error(f"Error instantiating browser: {e}")
@@ -345,7 +458,7 @@ def launch(  # noqa: C901
 
     # Launch browser
     try:
-        bl.launch(url=launch_url)
+        browser_controller.launch(url=launch_url)
     except Exception as e:
         console.print(f"❌ [red]Error launching browser:[/red] {e}")
         logger.error(f"Error launching browser: {e}")
@@ -367,7 +480,9 @@ def launch(  # noqa: C901
             f"Attempting to inject cookies for domain {domain} (user={user}, env={env})"
         )
 
-        injected_cookies = inject_and_verify_cookies(bl, user, env, cookie_config)
+        injected_cookies = inject_and_verify_cookies(
+            browser_controller, user, env, cookie_config
+        )
 
         if injected_cookies:
             console.print(
@@ -376,7 +491,7 @@ def launch(  # noqa: C901
             )
 
             if url:
-                bl.safe_get_address(url + "/ui")
+                browser_controller.safe_get_address(url + "/ui")
 
     except Exception as e:
         logger.warning(
@@ -400,24 +515,28 @@ def launch(  # noqa: C901
         pass
 
     try:
-        console.print("Press Ctrl+D to exit.")
+        console.print("Press Ctrl+D or q to exit.")
         console.print("Press 'Enter' to capture a screenshot.")
         console.print("Press 's' to save/cache cookies for this session.")
+        console.print("Press 'c' to dump all cookies from the browser.")
+
         while True:
-            if bl.driver.session_id is None:
+            if browser_controller.driver.session_id is None:
                 console.print(
                     "session has gone bad, you need to relaunch to be able to "
                     "capture screenshot"
                 )
             char = sys.stdin.read(1)
-            if not char or char == "\x04":  # EOF or Ctrl+D
+            if not char or char == "\x04" or char.lower() == "q":  # EOF or Ctrl+D
+                # Exit the loop
                 break
             elif char.lower() == "\n" or char.lower() == "\r":
+                # Capture screenshot
                 try:
                     screenshot_name = gen.generate()
                     _capture_screenshot(
                         screenshot_name,
-                        driver=bl.driver,
+                        driver=browser_controller.driver,
                         delay=0.5,
                     )
                     console.print(f"Captured: {screenshot_name}")
@@ -428,81 +547,21 @@ def launch(  # noqa: C901
                     )
                     raise e
             elif char.lower() == "s":
-                # Capture and cache cookies from the browser
-                try:
-                    target_cookies = list(
-                        cookie_config_data["users"][user][env]["cookies"].keys()
-                    )
-                    target_domains = list(
-                        {
-                            val["domain"]
-                            for val in cookie_config_data["users"][user][env][
-                                "cookies"
-                            ].values()
-                        }
-                    )
-                    browser_cookies: list[dict] = []
-                    target_browser_cookies: list[dict] = []
-                    for target_domain in target_domains:
-                        browser_cookies.extend(
-                            read_cookies_from_browser(bl.driver, target_domain)
-                        )
-                    for cookie in browser_cookies:
-                        if cookie["name"] in target_cookies and cookie["name"] not in [
-                            c["name"] for c in target_browser_cookies
-                        ]:
-                            target_browser_cookies.append(cookie)
+                # Save/cache cookies for this session
+                cache_cookies_for_session(
+                    browser_controller,
+                    user,
+                    env,
+                    domain,
+                    cookie_config_data,
+                    cookie_config,
+                    logger,
+                    console,
+                )
 
-                    logger.info(
-                        f"Read {len(target_browser_cookies)} cookies from browser for"
-                        f" {user}/{env}:{target_domains}"
-                    )
-                    if target_browser_cookies:
-                        if cookie_config is None:
-                            logger.error(
-                                "CookieConfig is not initialized, cannot update cache"
-                            )
-                            console.print(
-                                "❌ [red]Error:[/red] CookieConfig is not initialized, "
-                                "cannot update cache"
-                            )
-                            continue
-                        # Update cache entries for each cookie
-                        for cookie in target_browser_cookies:
-                            cookie_config.update_cookie_cache(
-                                user,
-                                env,
-                                cookie_config_data["users"][user][env]["cookies"][
-                                    cookie["name"]
-                                ]["domain"],
-                                cookie["name"],
-                                cookie.get("value", ""),
-                            )
-                        # Save config back to file
-
-                        config_file = get_home_directory() / "config.toml"
-                        if cookie_config:
-                            with open(config_file, "wb") as f:
-                                tomli_w.dump(cookie_config.config_data, f)
-                        console.print(
-                            f"✅ Cached {len(target_browser_cookies)} cookies for "
-                            f"{user}/{env}/{target_domains}"
-                        )
-                        logger.info(
-                            f"Saved {len(target_browser_cookies)} cookies "
-                            f"for {user}/{env}/{target_domains}"
-                        )
-                        if cookie_config:
-                            users_json = json.dumps(
-                                cookie_config.config_data["users"], indent=2
-                            )
-                            logger.debug(f"Cookies: {users_json}")
-                    else:
-                        console.print(f"⚠️ No cookies found for domain {domain}")
-                        logger.debug(f"⚠️ No cookies found for domain {domain}")
-                except Exception as e:
-                    console.print(f"❌ Error caching cookies: {e}")
-                    logger.error(f"Error caching cookies: {e}", exc_info=True)
+            elif char.lower() == "c":
+                # Dump all cookies from the browser
+                _dump_cookies_from_browser(browser_controller.driver, logger, console)
 
     except EOFError:
         console.print("\nExiting...")
@@ -514,7 +573,7 @@ def launch(  # noqa: C901
             except (termios.error, OSError):
                 pass
         try:
-            bl.driver.close()
+            browser_controller.driver.close()
         except Exception:
             pass
 

@@ -6,12 +6,16 @@ cookie rules and cache.
 All docstrings use Google-style format.
 """
 
-import json
 import logging
+import textwrap
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
+import yaml
+from rich.table import Table
 from selenium import webdriver
 
 logger = logging.getLogger(__name__)
@@ -482,9 +486,11 @@ def read_cookies_from_browser(driver: Any, domain: str) -> List[Dict[str, Any]]:
         }
         for c in filtered_cookies
     ]
-    logger.debug(
-        "Cookies read from browser (summary): %s", json.dumps(summary, indent=2)
-    )
+
+    indented = textwrap.indent(yaml.dump(summary, sort_keys=False), "  ")  # two spaces
+
+    logger.debug("Cookies read from browser (summary):\n%s", indented)
+
     return filtered_cookies
 
 
@@ -658,3 +664,129 @@ def inject_and_verify_cookies(
         raise
 
     return cookies_to_inject
+
+
+def _format_cookie_expiry(expiry: Any) -> str:
+    """Format a cookie expiry timestamp as a readable relative duration.
+
+    Args:
+        expiry: The cookie expiry value as a Unix timestamp in seconds.
+            This may be ``None``, an ``int``/``float``, or a string that can
+            be converted to ``float``. ``None`` is treated as a session
+            cookie (no explicit expiry).
+
+    Returns:
+        A short human-readable string describing how long until the cookie
+        expires, or a status string:
+
+        * ``"session"``: The cookie has no explicit expiry (session cookie).
+        * ``"invalid"``: The expiry value could not be parsed as a timestamp.
+        * ``"expired"``: The expiry time is in the past or has just passed.
+        * ``"+<n>s"``: The cookie expires in ``n`` seconds (less than 1 minute).
+        * ``"+<n>m"``: The cookie expires in ``n`` minutes (less than 1 hour).
+        * ``"+<n>h"``: The cookie expires in ``n`` hours (less than 1 day),
+          rounded to the nearest hour.
+        * ``"+<n>d"``: The cookie expires in ``n`` days, rounded to the
+          nearest day.
+
+    Examples:
+        >>> _format_cookie_expiry(None)
+        'session'
+        >>> _format_cookie_expiry(time.time() - 10)
+        'expired'
+        >>> _format_cookie_expiry(time.time() + 30)
+        '+30s'
+        >>> _format_cookie_expiry(time.time() + 5 * 60)
+        '+5m'
+        >>> _format_cookie_expiry("not-a-timestamp")
+        'invalid'
+
+    """
+    if expiry is None:
+        return "session"
+
+    try:
+        expiry_ts = float(expiry)
+    except (TypeError, ValueError):
+        return "invalid"
+
+    remaining_seconds = int(expiry_ts - time.time())
+    if remaining_seconds <= 0:
+        return "expired"
+    if remaining_seconds < 60:
+        return f"+{remaining_seconds}s"
+    if remaining_seconds < 3600:
+        minutes = remaining_seconds // 60
+        return f"+{minutes}m"
+    if remaining_seconds < 86400:
+        hours = (remaining_seconds + 1800) // 3600
+        return f"+{hours}h"
+
+    days = (remaining_seconds + 43200) // 86400
+    return f"+{days}d"
+
+
+def _dump_cookies_from_browser(
+    driver: Any,
+    logger: logging.Logger,
+    console: Any,
+) -> None:
+    """Dump cookies from the browser for the current domain.
+
+    Args:
+        driver: The browser driver instance.
+        logger: Logger instance for logging.
+        console: Console instance for user output.
+
+    Returns:
+        None: This function is used for its side effects of printing cookie
+            information to the console and writing details to the log.
+
+    Raises:
+        Exception: If an unexpected error occurs while reading or processing
+            cookies from the browser. These exceptions are caught and logged
+            internally within the function.
+    """
+    browser_cookies = read_cookies_from_browser(driver, "")
+    try:
+        current_url = getattr(driver, "current_url", "")
+        parsed_url = urlparse(current_url)
+        effective_domain = parsed_url.netloc or parsed_url.path.split("/")[0]
+
+        table = Table(
+            title=f"Cookies from browser for domain {effective_domain or '*'}"
+        )
+        table.add_column("#", justify="right")
+        table.add_column("Name", style="cyan", no_wrap=True)
+        table.add_column("Value (first 6 chars)", style="magenta")
+        table.add_column("Domain")
+        table.add_column("Path")
+        table.add_column("Secure")
+        table.add_column("HttpOnly")
+        table.add_column("SameSite")
+        table.add_column("Expiry")
+        sorted_cookies = sorted(
+            browser_cookies,
+            key=lambda cookie: str(cookie.get("name", "")).lower(),
+        )
+        for index, cookie in enumerate(sorted_cookies, start=1):
+            value_preview = cookie["value"][:6] if cookie.get("value") else ""
+            table.add_row(
+                str(index),
+                cookie.get("name", ""),
+                f"{value_preview}..." if value_preview else "",
+                str(cookie.get("domain", "")),
+                str(cookie.get("path", "")),
+                "yes" if bool(cookie.get("secure", False)) else "no",
+                "yes" if bool(cookie.get("httpOnly", False)) else "no",
+                str(cookie.get("sameSite", "")),
+                _format_cookie_expiry(cookie.get("expiry")),
+            )
+        console.print(table)
+        logger.info(
+            f"Dumped {len(browser_cookies)} cookies from browser for "
+            f"domain {effective_domain}"
+        )
+    except Exception as e:
+        console.print(f"❌ Error reading cookies: {e}")
+        logger.error(f"Error reading cookies: {e}", exc_info=True)

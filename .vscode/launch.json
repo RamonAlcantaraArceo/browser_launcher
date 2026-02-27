@@ -12,13 +12,14 @@
             "purpose": ["debug-test"],
             "console": "integratedTerminal",
             "justMyCode": false,
+            "envFile": "${workspaceFolder}/.env.test",
             "program": "${workspaceFolder}/src/browser_launcher/cli.py",
             "args": [
                 "launch",
                 "--browser=chrome",
                 "https://google.com",
                 "--locale=fr-FR",
-                "--headless"
+                // "--headless"
                 // "--user=default",
                 // "--env=prod",
                 // "--verbose",
