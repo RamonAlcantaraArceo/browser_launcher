@@ -497,8 +497,10 @@ def launch(  # noqa: C901
                 )
             char = sys.stdin.read(1)
             if not char or char == "\x04" or char.lower() == "q":  # EOF or Ctrl+D
+                # Exit the loop
                 break
             elif char.lower() == "\n" or char.lower() == "\r":
+                # Capture screenshot
                 try:
                     screenshot_name = gen.generate()
                     _capture_screenshot(
@@ -514,6 +516,7 @@ def launch(  # noqa: C901
                     )
                     raise e
             elif char.lower() == "s":
+                # Save/cache cookies for this session
                 cache_cookies_for_session(
                     browser_controller,
                     user,
@@ -526,7 +529,7 @@ def launch(  # noqa: C901
                 )
 
             elif char.lower() == "c":
-                # And replace the selection with:
+                # Dump all cookies from the browser
                 _dump_cookies_from_browser(browser_controller.driver, logger, console)
 
     except EOFError:
