@@ -21,6 +21,7 @@ toml = "^0.10.2"
 types-toml = "^0.10.8.20240310"
 tomli-w = "^1.2.0"
 r3a-minikit = {url = "https://github.com/RamonAlcantaraArceo/r3a-minikit/releases/download/v0.0.1/r3a_minikit-0.0.1-py3-none-any.whl"}
+pyyaml = "^6.0.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0"

@@ -6,7 +6,9 @@ cookie rules and cache.
 All docstrings use Google-style format.
 """
 
-import json
+
+import yaml
+import textwrap
 import logging
 import time
 from dataclasses import dataclass, field
@@ -485,9 +487,15 @@ def read_cookies_from_browser(driver: Any, domain: str) -> List[Dict[str, Any]]:
         }
         for c in filtered_cookies
     ]
-    logger.debug(
-        "Cookies read from browser (summary): %s", json.dumps(summary, indent=2)
-    )
+
+    yaml_str = yaml.dump(summary, sort_keys=False)
+    indented = textwrap.indent(yaml_str, "  ")   # two spaces
+
+    logger.debug("Cookies read from browser (summary):\n%s", indented)
+
+    # logger.debug(
+    #     "Cookies read from browser (summary): \n%s", yaml.dump(summary, sort_keys=False)
+    # )
     return filtered_cookies
 
 
