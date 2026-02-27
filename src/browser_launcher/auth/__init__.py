@@ -7,28 +7,28 @@ authentication workflows with browsers.
 from .base import AuthenticatorBase
 from .config import AuthConfig
 from .exceptions import (
-    AuthError,
     AuthConfigError,
     AuthenticationFailedError,
+    AuthError,
     AuthSessionError,
     AuthTimeoutError,
     CredentialsError,
 )
+from .factory import AuthFactory
 from .result import AuthResult
 
 __all__ = [
     # Base classes
     "AuthenticatorBase",
-    
+    # Factory
+    "AuthFactory",
     # Configuration
     "AuthConfig",
-    
     # Result data
     "AuthResult",
-    
     # Exceptions
     "AuthError",
-    "AuthConfigError", 
+    "AuthConfigError",
     "AuthenticationFailedError",
     "AuthSessionError",
     "AuthTimeoutError",

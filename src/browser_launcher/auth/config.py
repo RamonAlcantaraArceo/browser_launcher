@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 
 @dataclass
@@ -46,7 +46,7 @@ class AuthConfig:
     screenshot_on_failure: bool = False
     """Whether to take screenshots when authentication fails."""
 
-    screenshot_directory: Optional[Path] = None
+    screenshot_directory: Optional[Union[str, Path]] = None
     """Directory to save failure screenshots."""
 
     allowed_domains: List[str] = field(default_factory=list)
@@ -131,7 +131,9 @@ class AuthConfig:
             "page_load_timeout": self.page_load_timeout,
             "element_wait_timeout": self.element_wait_timeout,
             "screenshot_on_failure": self.screenshot_on_failure,
-            "screenshot_directory": str(self.screenshot_directory) if self.screenshot_directory else None,
+            "screenshot_directory": str(self.screenshot_directory)
+            if self.screenshot_directory
+            else None,
             "allowed_domains": self.allowed_domains.copy(),
             "required_cookies": self.required_cookies.copy(),
         }
