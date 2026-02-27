@@ -145,7 +145,7 @@ jobs:
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: ./junit.xml
-        flags: ${{ matrix.type-test }},python-${{ matrix.python-version }}
+        flags: ${{ matrix.type-test }}-python-${{ matrix.python-version }}
         name: codecov-tests-python-${{ matrix.python-version }}
         report_type: test_results
         verbose: true
@@ -157,7 +157,7 @@ jobs:
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: ./coverage.xml
-        flags: ${{ matrix.type-test }},coverage
+        flags: ${{ matrix.type-test }}-coverage
         name: codecov-coverage-python-${{ matrix.python-version }}
         report_type: coverage
         verbose: true
