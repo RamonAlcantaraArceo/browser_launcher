@@ -122,13 +122,9 @@ def cache_cookies_for_session(
 ) -> None:
     """Cache cookies from the browser session for the specified user/env."""
     try:
-        target_cookies = list(cookie_config_data["users"][user][env]["cookies"].keys())
-        target_domains = list(
-            {
-                val["domain"]
-                for val in cookie_config_data["users"][user][env]["cookies"].values()
-            }
-        )
+        user_env_cookies = cookie_config_data["users"][user][env]["cookies"]
+        target_cookies = list(user_env_cookies.keys())
+        target_domains = list({val["domain"] for val in user_env_cookies.values()})
         browser_cookies: list[dict] = []
         target_browser_cookies: list[dict] = []
         for target_domain in target_domains:
@@ -158,18 +154,17 @@ def cache_cookies_for_session(
                 cookie_config.update_cookie_cache(
                     user,
                     env,
-                    cookie_config_data["users"][user][env]["cookies"][cookie["name"]][
-                        "domain"
-                    ],
+                    user_env_cookies[cookie["name"]]["domain"],
                     cookie["name"],
                     cookie.get("value", ""),
                 )
-            # Save config back to file
 
+            # Save config back to file
             config_file = get_home_directory() / "config.toml"
-            if cookie_config:
-                with open(config_file, "wb") as f:
-                    tomli_w.dump(cookie_config.config_data, f)
+
+            with open(config_file, "wb") as f:
+                tomli_w.dump(cookie_config.config_data, f)
+
             console.print(
                 f"✅ Cached {len(target_browser_cookies)} cookies for "
                 f"{user}/{env}/{target_domains}"
@@ -178,9 +173,9 @@ def cache_cookies_for_session(
                 f"Saved {len(target_browser_cookies)} cookies "
                 f"for {user}/{env}/{target_domains}"
             )
-            if cookie_config:
-                users_json = json.dumps(cookie_config.config_data["users"], indent=2)
-                logger.debug(f"Cookies: {users_json}")
+
+            users_json = json.dumps(cookie_config.config_data["users"], indent=2)
+            logger.debug(f"Cookies: {users_json}")
         else:
             console.print(f"⚠️ No cookies found for domain {domain}")
             logger.debug(f"⚠️ No cookies found for domain {domain}")

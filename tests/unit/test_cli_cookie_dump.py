@@ -10,7 +10,7 @@ from browser_launcher.cookies import _dump_cookies_from_browser, _format_cookie_
 
 @pytest.mark.unit
 def test_format_cookie_expiry_relative_units(monkeypatch):
-    monkeypatch.setattr("browser_launcher.cli.time.time", lambda: 1000)
+    monkeypatch.setattr("browser_launcher.cookies.time.time", lambda: 1000)
 
     assert _format_cookie_expiry(None) == "session"
     assert _format_cookie_expiry("bad") == "invalid"
@@ -87,9 +87,9 @@ def test_dump_cookies_uses_current_url_domain_and_renders_cookie_fields(monkeypa
     assert "zxy123..." in output
     assert "example.com" in output
     assert "/" in output
-    assert "1" in output
-    assert "2" in output
-    assert "3" in output
+    assert "│ 1 │" in output
+    assert "│ 2 │" in output
+    assert "│ 3 │" in output
     assert "yes" in output
     assert "Lax" in output
     assert "+2h" in output

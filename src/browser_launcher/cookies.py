@@ -6,16 +6,15 @@ cookie rules and cache.
 All docstrings use Google-style format.
 """
 
-
-import yaml
-import textwrap
 import logging
+import textwrap
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
+import yaml
 from rich.table import Table
 from selenium import webdriver
 
@@ -488,14 +487,10 @@ def read_cookies_from_browser(driver: Any, domain: str) -> List[Dict[str, Any]]:
         for c in filtered_cookies
     ]
 
-    yaml_str = yaml.dump(summary, sort_keys=False)
-    indented = textwrap.indent(yaml_str, "  ")   # two spaces
+    indented = textwrap.indent(yaml.dump(summary, sort_keys=False), "  ")  # two spaces
 
     logger.debug("Cookies read from browser (summary):\n%s", indented)
 
-    # logger.debug(
-    #     "Cookies read from browser (summary): \n%s", yaml.dump(summary, sort_keys=False)
-    # )
     return filtered_cookies
 
 
