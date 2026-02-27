@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, PropertyMock, call, mock_open, patch
+from unittest.mock import MagicMock, PropertyMock, call, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -705,8 +705,6 @@ def test_cache_cookies_for_session_success():
     with (
         patch("browser_launcher.cli.read_cookies_from_browser") as mock_read_cookies,
         patch("browser_launcher.cli.get_home_directory") as mock_get_home,
-        patch("browser_launcher.cli.tomli_w.dump") as mock_dump,
-        patch("builtins.open", mock_open()) as mock_file,
     ):
         mock_read_cookies.return_value = mock_browser_cookies
         mock_get_home.return_value.joinpath.return_value = "/fake/config.toml"
@@ -740,8 +738,7 @@ def test_cache_cookies_for_session_success():
         )
 
         # Verify config was saved to file
-        mock_file.assert_called_once()
-        mock_dump.assert_called_once_with(cookie_config_data, mock_file().__enter__())
+        mock_cookie_config.persist_to_file.assert_called_once()
 
         # Verify success messages
         success_call = mock_console.print.call_args_list[-1][0][
@@ -925,13 +922,14 @@ def test_cache_cookies_for_session_file_write_exception():
     with (
         patch("browser_launcher.cli.read_cookies_from_browser") as mock_read_cookies,
         patch("browser_launcher.cli.get_home_directory") as mock_get_home,
-        patch("builtins.open", mock_open()) as mock_file,
     ):
         mock_read_cookies.return_value = mock_browser_cookies
         mock_get_home.return_value.joinpath.return_value = "/fake/config.toml"
 
         # Simulate file write error
-        mock_file.side_effect = PermissionError("Permission denied")
+        mock_cookie_config.persist_to_file.side_effect = PermissionError(
+            "Permission denied"
+        )
 
         cache_cookies_for_session(
             mock_browser_controller,
@@ -996,8 +994,6 @@ def test_cache_cookies_for_session_multiple_domains():
     with (
         patch("browser_launcher.cli.read_cookies_from_browser") as mock_read_cookies,
         patch("browser_launcher.cli.get_home_directory") as mock_get_home,
-        patch("browser_launcher.cli.tomli_w.dump"),
-        patch("builtins.open", mock_open()),
     ):
         mock_read_cookies.side_effect = mock_read_cookies_side_effect
         mock_get_home.return_value.joinpath.return_value = "/fake/config.toml"
@@ -1057,8 +1053,6 @@ def test_cache_cookies_for_session_duplicate_cookie_names():
     with (
         patch("browser_launcher.cli.read_cookies_from_browser") as mock_read_cookies,
         patch("browser_launcher.cli.get_home_directory") as mock_get_home,
-        patch("browser_launcher.cli.tomli_w.dump"),
-        patch("builtins.open", mock_open()),
     ):
         mock_read_cookies.return_value = mock_browser_cookies
         mock_get_home.return_value.joinpath.return_value = "/fake/config.toml"

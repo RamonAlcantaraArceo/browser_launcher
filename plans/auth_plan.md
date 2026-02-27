@@ -63,6 +63,8 @@ User: Help me generate a step by step plan in the mode of prompts that can be us
    - `tests/smoke/test_auth_integration.py` for end-to-end flows
    - Mock external auth services and entry points
 
+   **Status (implemented):** CLI authentication integration tests were split out into `tests/unit/test_cli_auth.py`, with `tests/unit/test_cli_launch.py` kept focused on launch behavior. Current run: `27 passed` for `test_cli_auth.py` + `test_cli_launch.py`.
+
 9. **Update configuration templates** in default_config.toml
    - Add `[auth]` section with default settings
    - Document configuration structure and examples

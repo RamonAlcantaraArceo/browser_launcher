@@ -337,6 +337,37 @@ def test_prune_expired_cookies_removes_stale_entries():
 
 
 @pytest.mark.unit
+def test_persist_to_file_writes_config_data(tmp_path):
+    """persist_to_file should serialise config_data to a TOML file on disk."""
+    config_data = {
+        "users": {
+            "alice": {
+                "prod": {
+                    "cookies": {
+                        "session_id": {
+                            "domain": "example.com",
+                            "value": "abc123",
+                            "timestamp": "2025-01-01T00:00:00+00:00",
+                        }
+                    }
+                }
+            }
+        }
+    }
+    config = CookieConfig(config_data)
+    target_file = tmp_path / "config.toml"
+
+    config.persist_to_file(target_file)
+
+    assert target_file.exists()
+    import tomllib
+
+    with open(target_file, "rb") as f:
+        written = tomllib.load(f)
+    assert written == config_data
+
+
+@pytest.mark.unit
 def test_read_cookies_from_browser():
     """Test reading cookies from Selenium driver filtered by domain."""
     mock_driver = MagicMock()

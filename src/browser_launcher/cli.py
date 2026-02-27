@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse
 
-import tomli_w
 import typer
 from r3a_logger.logger import (  # type: ignore[import-untyped]
     get_current_logger,
@@ -19,6 +18,7 @@ from r3a_logger.logger import (  # type: ignore[import-untyped]
 from rich.console import Console
 from rich.panel import Panel
 
+from browser_launcher.auth.factory import AuthFactory
 from browser_launcher.browsers.factory import BrowserFactory
 from browser_launcher.config import BrowserLauncherConfig
 from browser_launcher.cookies import (
@@ -26,12 +26,30 @@ from browser_launcher.cookies import (
     _dump_cookies_from_browser,
     inject_and_verify_cookies,
     read_cookies_from_browser,
+    write_cookies_to_browser,
 )
 from browser_launcher.screenshot import IDGenerator, _capture_screenshot
 from browser_launcher.utils import get_command_context
 
 app = typer.Typer(help="Browser launcher CLI tool")
 console = Console()
+
+AUTH_CONFIG_FIELD_NAMES = {
+    "timeout_seconds",
+    "retry_attempts",
+    "retry_delay_seconds",
+    "headless",
+    "credentials",
+    "custom_options",
+    "user_agent",
+    "window_size",
+    "page_load_timeout",
+    "element_wait_timeout",
+    "screenshot_on_failure",
+    "screenshot_directory",
+    "allowed_domains",
+    "required_cookies",
+}
 
 
 def get_home_directory() -> Path:
@@ -197,9 +215,7 @@ def cache_cookies_for_session(
 
             # Save config back to file
             config_file = get_home_directory() / "config.toml"
-
-            with open(config_file, "wb") as f:
-                tomli_w.dump(cookie_config.config_data, f)
+            cookie_config.persist_to_file(config_file)
 
             console.print(
                 f"✅ Cached {len(target_browser_cookies)} cookies for "
@@ -218,6 +234,207 @@ def cache_cookies_for_session(
     except Exception as e:
         console.print(f"❌ Error caching cookies: {e}")
         logger.error(f"Error caching cookies: {e}", exc_info=True)
+
+
+def _persist_cookie_config(
+    cookie_config: CookieConfig,
+    logger: logging.Logger,
+    console: Console,
+) -> None:
+    """Persist current cookie configuration to disk."""
+    config_file = get_home_directory() / "config.toml"
+    cookie_config.persist_to_file(config_file)
+    logger.debug(f"Persisted cookie cache to {config_file}")
+    console.print("✅ Saved authentication cookies to cache")
+
+
+def _get_user_env_auth_modules(
+    config_loader: BrowserLauncherConfig,
+    user: str,
+    env: str,
+) -> list[str]:
+    """Get configured auth modules in [users.{user}.{env}.auth]."""
+    auth_section = (
+        config_loader.config_data.get("users", {})
+        .get(user, {})
+        .get(env, {})
+        .get("auth", {})
+    )
+    if not isinstance(auth_section, dict):
+        return []
+
+    return [
+        key
+        for key, value in auth_section.items()
+        if isinstance(value, dict) and key not in AUTH_CONFIG_FIELD_NAMES
+    ]
+
+
+def _select_auth_module(
+    config_loader: BrowserLauncherConfig,
+    user: str,
+    env: str,
+) -> Optional[str]:
+    """Select an auth module name from user/env scope first, then global scope."""
+    user_env_modules = _get_user_env_auth_modules(config_loader, user, env)
+    if user_env_modules:
+        return user_env_modules[0]
+
+    configured_modules = config_loader.get_available_auth_modules()
+    if configured_modules:
+        return next(iter(configured_modules.keys()))
+
+    return None
+
+
+def _prompt_for_credentials(credentials: dict[str, Any]) -> dict[str, Any]:
+    """Prompt user for credential values and return updated credentials."""
+    updated_credentials = dict(credentials)
+    for key, value in credentials.items():
+        hide_input = "password" in key.lower() or "token" in key.lower()
+        default_value = None if hide_input else str(value)
+        updated_credentials[key] = typer.prompt(
+            f"Enter {key}",
+            default=default_value,
+            hide_input=hide_input,
+        )
+    return updated_credentials
+
+
+def _cache_auth_result_cookies(
+    auth_cookies: list[dict[str, Any]],
+    browser_controller: Any,
+    cookie_config: CookieConfig,
+    user: str,
+    env: str,
+    domain: Optional[str],
+    logger: logging.Logger,
+    console: Console,
+) -> None:
+    """Inject authenticated cookies into browser and persist cookie cache."""
+    write_cookies_to_browser(browser_controller.driver, auth_cookies)
+
+    for cookie in auth_cookies:
+        cookie_name = cookie.get("name")
+        cookie_domain = cookie.get("domain") or domain
+        if not cookie_name or not cookie_domain:
+            continue
+        cookie_config.update_cookie_cache(
+            user,
+            env,
+            cookie_domain,
+            cookie_name,
+            cookie.get("value", ""),
+        )
+
+    _persist_cookie_config(cookie_config, logger, console)
+
+
+def _run_authentication_attempt(
+    authenticator: Any, launch_url: str
+) -> list[dict[str, Any]]:
+    """Run one authenticator attempt and return cookies on success."""
+    auth_result = authenticator.authenticate(launch_url)
+    if not auth_result.success:
+        raise RuntimeError(auth_result.error_message or "Authentication failed")
+    if not auth_result.cookies:
+        raise RuntimeError("Authentication returned no cookies")
+    return auth_result.cookies
+
+
+def _should_retry_auth(
+    attempt: int,
+    total_attempts: int,
+    auth_config: Any,
+) -> bool:
+    """Prompt user for retry decision and optionally refresh credentials."""
+    if attempt >= total_attempts:
+        return False
+
+    retry = typer.confirm(
+        "Authentication failed. Retry with updated credentials?",
+        default=True,
+    )
+    if not retry:
+        return False
+
+    if auth_config.credentials:
+        auth_config.credentials = _prompt_for_credentials(auth_config.credentials)
+    return True
+
+
+def attempt_authentication(
+    browser_controller: Any,
+    config_loader: BrowserLauncherConfig,
+    cookie_config: CookieConfig,
+    user: str,
+    env: str,
+    domain: Optional[str],
+    launch_url: str,
+    logger: logging.Logger,
+    console: Console,
+) -> Optional[list[dict[str, Any]]]:
+    """Attempt authentication using cache first, then auth module with retries."""
+    injected_cookies = inject_and_verify_cookies(
+        browser_controller,
+        user,
+        env,
+        cookie_config,
+    )
+    if injected_cookies:
+        logger.info(
+            f"Using {len(injected_cookies)} valid cached cookies for {user}/{env}"
+        )
+        return injected_cookies
+
+    module_name = _select_auth_module(config_loader, user, env)
+    if not module_name:
+        logger.info("No authentication module configured; continuing without auth")
+        return None
+
+    logger.info(f"Attempting authentication with module '{module_name}'")
+    auth_config = config_loader.get_auth_config(
+        module_name=module_name,
+        user=user,
+        env=env,
+    )
+    authenticator = AuthFactory.create(module_name, auth_config)
+
+    if hasattr(authenticator, "setup_driver"):
+        authenticator.setup_driver(browser_controller.driver)
+
+    total_attempts = max(1, auth_config.retry_attempts + 1)
+    for attempt in range(1, total_attempts + 1):
+        try:
+            auth_cookies = _run_authentication_attempt(authenticator, launch_url)
+            _cache_auth_result_cookies(
+                auth_cookies=auth_cookies,
+                browser_controller=browser_controller,
+                cookie_config=cookie_config,
+                user=user,
+                env=env,
+                domain=domain,
+                logger=logger,
+                console=console,
+            )
+            logger.info(
+                f"Authentication succeeded with module '{module_name}' "
+                f"on attempt {attempt}/{total_attempts}"
+            )
+            return auth_cookies
+
+        except Exception as e:
+            logger.warning(
+                f"Authentication attempt {attempt}/{total_attempts} failed: {e}",
+                exc_info=True,
+            )
+            if not _should_retry_auth(attempt, total_attempts, auth_config):
+                break
+
+    logger.warning(
+        "Authentication not completed; continuing without authenticated cookies"
+    )
+    return None
 
 
 @app.command()
@@ -472,25 +689,40 @@ def launch(  # noqa: C901
         logger.warning(f"Could not extract domain from URL {launch_url}: {e}")
     # Continue execution even if domain extraction fails
 
-    # Load cookie config and inject cached cookies if available
+    # Load cookie config and perform authentication flow (cache first)
     try:
         cookie_config_data = config_loader.config_data
         cookie_config = CookieConfig(cookie_config_data)
+
         logger.info(
-            f"Attempting to inject cookies for domain {domain} (user={user}, env={env})"
+            f"Attempting authentication for domain {domain} "
+            f"(user={user}, env={env})"
         )
 
-        injected_cookies = inject_and_verify_cookies(
-            browser_controller, user, env, cookie_config
+        injected_cookies = attempt_authentication(
+            browser_controller=browser_controller,
+            config_loader=config_loader,
+            cookie_config=cookie_config,
+            user=user,
+            env=env,
+            domain=domain,
+            launch_url=launch_url,
+            logger=logger,
+            console=console,
         )
 
         if injected_cookies:
+            # Log and inform user of injected cookies
             console.print(
-                f"✅ Injected {len(injected_cookies)} cookies: "
+                f"✅ Applied {len(injected_cookies)} cookies: "
                 f"{[cookie['name'] for cookie in injected_cookies]}"
             )
 
             if url:
+                # TODO: improve config on this so that there is a 2 url pattern
+                # 1 that matches domain for cookie injection
+                # another that is the actual launch url
+                # they could be same or different
                 browser_controller.safe_get_address(url + "/ui")
 
     except Exception as e:

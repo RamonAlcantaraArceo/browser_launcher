@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
+import tomli_w
 import yaml
 from rich.table import Table
 from selenium import webdriver
@@ -434,6 +435,29 @@ class CookieConfig:
             f"Remaining: "
             f"{len([c for c in valid_cookies.values() if c.get('domain') == domain])}."
         )
+
+    def persist_to_file(self, config_file: Any) -> None:
+        """Write the current configuration data to a TOML file on disk.
+
+        Serialises ``self.config_data`` using ``tomli_w`` and writes it to
+        *config_file*.  This is the single, authoritative place for
+        persisting cookie configuration so that callers do not need to
+        handle low-level file I/O or serialisation directly.
+
+        Args:
+            config_file: A :class:`~pathlib.Path` (or *str*) pointing to the
+                target TOML file.  The file is opened in binary-write mode
+                (``"wb"``) and its previous contents are replaced entirely.
+
+        Returns:
+            None
+
+        Raises:
+            OSError: If the file cannot be opened or written.
+        """
+        with open(config_file, "wb") as f:
+            tomli_w.dump(self.config_data, f)
+        logger.debug(f"Persisted cookie config to {config_file}")
 
 
 def read_cookies_from_browser(driver: Any, domain: str) -> List[Dict[str, Any]]:
