@@ -16,9 +16,9 @@ def test_format_cookie_expiry_relative_units(monkeypatch):
     assert _format_cookie_expiry("bad") == "invalid"
     assert _format_cookie_expiry(999) == "expired"
     assert _format_cookie_expiry(1045) == "+45s"
-    assert _format_cookie_expiry(1061) == "+2m"
-    assert _format_cookie_expiry(4601) == "+2h"
-    assert _format_cookie_expiry(173801) == "+3d"
+    assert _format_cookie_expiry(1061) == "+1m"
+    assert _format_cookie_expiry(4601) == "+1h"
+    assert _format_cookie_expiry(173801) == "+2d"
 
 
 @pytest.mark.unit

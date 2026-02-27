@@ -682,13 +682,13 @@ def _format_cookie_expiry(expiry: Any) -> str:
     if remaining_seconds < 60:
         return f"+{remaining_seconds}s"
     if remaining_seconds < 3600:
-        minutes = (remaining_seconds + 59) // 60
+        minutes = remaining_seconds // 60
         return f"+{minutes}m"
     if remaining_seconds < 86400:
-        hours = (remaining_seconds + 3599) // 3600
+        hours = (remaining_seconds + 1800) // 3600
         return f"+{hours}h"
 
-    days = (remaining_seconds + 86399) // 86400
+    days = (remaining_seconds + 43200) // 86400
     return f"+{days}d"
 
 
