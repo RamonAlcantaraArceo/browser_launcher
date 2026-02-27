@@ -19,6 +19,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from browser_launcher.auth.factory import AuthFactory
+from browser_launcher.auth.retry import AuthRetryHandler
 from browser_launcher.browsers.factory import BrowserFactory
 from browser_launcher.config import BrowserLauncherConfig
 from browser_launcher.cookies import (
@@ -287,20 +288,6 @@ def _select_auth_module(
     return None
 
 
-def _prompt_for_credentials(credentials: dict[str, Any]) -> dict[str, Any]:
-    """Prompt user for credential values and return updated credentials."""
-    updated_credentials = dict(credentials)
-    for key, value in credentials.items():
-        hide_input = "password" in key.lower() or "token" in key.lower()
-        default_value = None if hide_input else str(value)
-        updated_credentials[key] = typer.prompt(
-            f"Enter {key}",
-            default=default_value,
-            hide_input=hide_input,
-        )
-    return updated_credentials
-
-
 def _cache_auth_result_cookies(
     auth_cookies: list[dict[str, Any]],
     browser_controller: Any,
@@ -340,27 +327,6 @@ def _run_authentication_attempt(
     if not auth_result.cookies:
         raise RuntimeError("Authentication returned no cookies")
     return auth_result.cookies
-
-
-def _should_retry_auth(
-    attempt: int,
-    total_attempts: int,
-    auth_config: Any,
-) -> bool:
-    """Prompt user for retry decision and optionally refresh credentials."""
-    if attempt >= total_attempts:
-        return False
-
-    retry = typer.confirm(
-        "Authentication failed. Retry with updated credentials?",
-        default=True,
-    )
-    if not retry:
-        return False
-
-    if auth_config.credentials:
-        auth_config.credentials = _prompt_for_credentials(auth_config.credentials)
-    return True
 
 
 def attempt_authentication(
@@ -403,8 +369,18 @@ def attempt_authentication(
     if hasattr(authenticator, "setup_driver"):
         authenticator.setup_driver(browser_controller.driver)
 
+    # Create retry handler
+    retry_handler = AuthRetryHandler(
+        config=auth_config,
+        console=console,
+        logger=logger,
+    )
+
     total_attempts = max(1, auth_config.retry_attempts + 1)
-    for attempt in range(1, total_attempts + 1):
+    while retry_handler.current_attempt < total_attempts:
+        retry_handler.increment_attempt()
+        attempt = retry_handler.current_attempt
+
         try:
             auth_cookies = _run_authentication_attempt(authenticator, launch_url)
             _cache_auth_result_cookies(
@@ -424,12 +400,22 @@ def attempt_authentication(
             return auth_cookies
 
         except Exception as e:
+            error_msg = str(e)
             logger.warning(
                 f"Authentication attempt {attempt}/{total_attempts} failed: {e}",
                 exc_info=True,
             )
-            if not _should_retry_auth(attempt, total_attempts, auth_config):
+
+            # Check if we should retry
+            if retry_handler.current_attempt >= total_attempts:
                 break
+
+            if not retry_handler.should_retry(error_message=error_msg):
+                break
+
+            # Update credentials if available
+            if auth_config.credentials:
+                auth_config.credentials = retry_handler.prompt_for_credentials()
 
     logger.warning(
         "Authentication not completed; continuing without authenticated cookies"
