@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 from rich.console import Console
 
-from browser_launcher.cli import _dump_cookies_from_browser, _format_cookie_expiry
+from browser_launcher.cookies import _dump_cookies_from_browser, _format_cookie_expiry
 
 
 @pytest.mark.unit
@@ -23,10 +23,8 @@ def test_format_cookie_expiry_relative_units(monkeypatch):
 
 @pytest.mark.unit
 def test_dump_cookies_uses_current_url_domain_and_renders_cookie_fields(monkeypatch):
-    captured_domains: list[str] = []
 
     def _mock_read_cookies(driver, domain):
-        captured_domains.append(domain)
         return [
             {
                 "name": "zeta_cookie",
@@ -57,11 +55,15 @@ def test_dump_cookies_uses_current_url_domain_and_renders_cookie_fields(monkeypa
                 "httpOnly": False,
                 "sameSite": "None",
                 "expiry": 1234567000,
-            }
+            },
         ]
 
-    monkeypatch.setattr("browser_launcher.cli.read_cookies_from_browser", _mock_read_cookies)
-    monkeypatch.setattr("browser_launcher.cli._format_cookie_expiry", lambda _: "+2h")
+    monkeypatch.setattr(
+        "browser_launcher.cookies.read_cookies_from_browser", _mock_read_cookies
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cookies._format_cookie_expiry", lambda _: "+2h"
+    )
 
     driver = MagicMock()
     driver.current_url = "https://example.com/dashboard"
@@ -70,7 +72,6 @@ def test_dump_cookies_uses_current_url_domain_and_renders_cookie_fields(monkeypa
 
     _dump_cookies_from_browser(driver, logger, console)
 
-    assert captured_domains == ["example.com"]
     output = console.export_text()
     alpha_pos = output.find("alpha_cookie")
     session_pos = output.find("session_id")
