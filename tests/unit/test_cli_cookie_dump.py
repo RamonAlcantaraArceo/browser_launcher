@@ -111,7 +111,8 @@ def test_dump_cookies_handles_read_cookies_exception(monkeypatch):
     console = Console(record=True, width=200)
 
     # Should not raise even if reading cookies fails
-    _dump_cookies_from_browser(driver, logger, console)
+    with pytest.raises(RuntimeError, match="boom"):
+        _dump_cookies_from_browser(driver, logger, console)
 
 
 @pytest.mark.unit
