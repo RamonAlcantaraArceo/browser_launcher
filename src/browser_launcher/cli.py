@@ -120,7 +120,43 @@ def cache_cookies_for_session(
     logger: logging.Logger,
     console: Console,
 ) -> None:
-    """Cache cookies from the browser session for the specified user/env."""
+    """Cache cookies from the active browser session for a given user and environment.
+
+    This function reads cookies from the provided ``browser_controller`` for the
+    domains configured under the given ``user`` and ``env`` in
+    ``cookie_config_data``. Matching cookies are written to the cookie cache via
+    ``cookie_config.update_cookie_cache`` and the updated configuration is
+    persisted to the main ``config.toml`` file in the browser_launcher home
+    directory.
+
+    All exceptions raised while reading or persisting cookies are caught and
+    logged; errors are also printed to the console. No exceptions are propagated
+    to the caller.
+
+    Args:
+        browser_controller: An object wrapping the Selenium WebDriver instance
+            whose ``driver`` attribute is used to read cookies from the browser.
+        user: The user identifier whose cookie configuration and cache should be
+            updated.
+        env: The environment name (for example, ``"dev"``, ``"staging"`` or
+            ``"prod"``) under which cookies are organized for the user.
+        domain: The domain originally requested on the CLI. Used only for
+            informational messages when no cookies are found.
+        cookie_config_data: The full cookie configuration data structure loaded
+            from ``config.toml``, used to determine which cookies and domains to
+            target for caching.
+        cookie_config: The ``CookieConfig`` instance used to update the cookie
+            cache. If ``None``, the cache will not be updated and an error is
+            logged and printed to the console.
+        logger: The application logger used to record informational, debug, and
+            error messages during the caching process.
+        console: The Rich ``Console`` instance used to display user-facing
+            messages about the caching operation.
+
+    Returns:
+        None. Results and any errors are communicated via logging and console
+        output.
+    """
     try:
         user_env_cookies = cookie_config_data["users"][user][env]["cookies"]
         target_cookies = list(user_env_cookies.keys())

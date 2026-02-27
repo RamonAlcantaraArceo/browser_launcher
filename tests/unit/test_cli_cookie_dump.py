@@ -93,3 +93,70 @@ def test_dump_cookies_uses_current_url_domain_and_renders_cookie_fields(monkeypa
     assert "yes" in output
     assert "Lax" in output
     assert "+2h" in output
+
+
+@pytest.mark.unit
+def test_dump_cookies_handles_read_cookies_exception(monkeypatch):
+
+    def _mock_read_cookies(driver, domain):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(
+        "browser_launcher.cookies.read_cookies_from_browser", _mock_read_cookies
+    )
+
+    driver = MagicMock()
+    driver.current_url = "https://example.com/dashboard"
+    logger = MagicMock()
+    console = Console(record=True, width=200)
+
+    # Should not raise even if reading cookies fails
+    _dump_cookies_from_browser(driver, logger, console)
+
+
+@pytest.mark.unit
+def test_dump_cookies_handles_inaccessible_current_url(monkeypatch):
+
+    class BadDriver:
+        @property
+        def current_url(self):
+            raise RuntimeError("cannot access current_url")
+
+    # Ensure cookie reading itself would succeed if called
+    def _mock_read_cookies(driver, domain):
+        return []
+
+    monkeypatch.setattr(
+        "browser_launcher.cookies.read_cookies_from_browser", _mock_read_cookies
+    )
+
+    driver = BadDriver()
+    logger = MagicMock()
+    console = Console(record=True, width=200)
+
+    # Should handle failure to access current_url gracefully
+    _dump_cookies_from_browser(driver, logger, console)
+
+
+@pytest.mark.unit
+def test_dump_cookies_handles_urlparse_failure(monkeypatch):
+
+    def _mock_urlparse(url):
+        raise ValueError("bad url")
+
+    monkeypatch.setattr("browser_launcher.cookies.urlparse", _mock_urlparse)
+
+    def _mock_read_cookies(driver, domain):
+        return []
+
+    monkeypatch.setattr(
+        "browser_launcher.cookies.read_cookies_from_browser", _mock_read_cookies
+    )
+
+    driver = MagicMock()
+    driver.current_url = "https://example.com/dashboard"
+    logger = MagicMock()
+    console = Console(record=True, width=200)
+
+    # Should cope with urlparse raising an exception
+    _dump_cookies_from_browser(driver, logger, console)

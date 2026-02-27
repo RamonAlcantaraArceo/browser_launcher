@@ -667,7 +667,41 @@ def inject_and_verify_cookies(
 
 
 def _format_cookie_expiry(expiry: Any) -> str:
-    """Format cookie expiry timestamp as a readable relative duration."""
+    """Format a cookie expiry timestamp as a readable relative duration.
+
+    Args:
+        expiry: The cookie expiry value as a Unix timestamp in seconds.
+            This may be ``None``, an ``int``/``float``, or a string that can
+            be converted to ``float``. ``None`` is treated as a session
+            cookie (no explicit expiry).
+
+    Returns:
+        A short human-readable string describing how long until the cookie
+        expires, or a status string:
+
+        * ``"session"``: The cookie has no explicit expiry (session cookie).
+        * ``"invalid"``: The expiry value could not be parsed as a timestamp.
+        * ``"expired"``: The expiry time is in the past or has just passed.
+        * ``"+<n>s"``: The cookie expires in ``n`` seconds (less than 1 minute).
+        * ``"+<n>m"``: The cookie expires in ``n`` minutes (less than 1 hour).
+        * ``"+<n>h"``: The cookie expires in ``n`` hours (less than 1 day),
+          rounded to the nearest hour.
+        * ``"+<n>d"``: The cookie expires in ``n`` days, rounded to the
+          nearest day.
+
+    Examples:
+        >>> _format_cookie_expiry(None)
+        'session'
+        >>> _format_cookie_expiry(time.time() - 10)
+        'expired'
+        >>> _format_cookie_expiry(time.time() + 30)
+        '+30s'
+        >>> _format_cookie_expiry(time.time() + 5 * 60)
+        '+5m'
+        >>> _format_cookie_expiry("not-a-timestamp")
+        'invalid'
+
+    """
     if expiry is None:
         return "session"
 
@@ -703,6 +737,15 @@ def _dump_cookies_from_browser(
         driver: The browser driver instance.
         logger: Logger instance for logging.
         console: Console instance for user output.
+
+    Returns:
+        None: This function is used for its side effects of printing cookie
+            information to the console and writing details to the log.
+
+    Raises:
+        Exception: If an unexpected error occurs while reading or processing
+            cookies from the browser. These exceptions are caught and logged
+            internally within the function.
     """
     browser_cookies = read_cookies_from_browser(driver, "")
     try:
