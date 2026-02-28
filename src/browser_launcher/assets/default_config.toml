@@ -59,11 +59,29 @@ element_wait_timeout = 10
 screenshot_on_failure = false
 
 # Example module-specific configurations
+#
+# Form-based authentication (examples.auth_modules.form_auth:FormAuthenticator)
+# Registered as "form_auth" entry point.  Supply username/password under
+# credentials and (optionally) override CSS selectors via custom_options.
+#
 # [auth.form_auth]
 # timeout_seconds = 45
-# credentials = { username_field = "email", password_field = "password" }
+# element_wait_timeout = 10
+# page_load_timeout = 20
+# screenshot_on_failure = true
+# screenshot_directory = "/tmp/auth_screenshots"
+# credentials = { username = "alice@example.com", password = "s3cret" }
 # allowed_domains = ["example.com", "test.example.com"]
 # required_cookies = ["session_id", "auth_token"]
+# custom_options = {
+#   login_url = "https://example.com/login",
+#   username_field = "input#email",
+#   password_field = "input#passwd",
+#   submit_button = "button.login-btn",
+#   success_indicator = ".dashboard-header",
+#   pre_login_delay = 0.5,
+#   post_login_delay = 1.0,
+# }
 
 # [auth.oauth]
 # timeout_seconds = 60

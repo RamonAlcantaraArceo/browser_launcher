@@ -5,7 +5,10 @@ description = "A small Python project to launch browsers (placeholder)."
 authors = ["Ramon Alcantara Arceo <you@example.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{ include = "browser_launcher", from = "src" }]
+packages = [
+	{ include = "browser_launcher", from = "src" },
+	{ include = "examples" },
+]
 
 # Include asset files
 include = [
@@ -36,6 +39,7 @@ browser-launcher = "browser_launcher.__main__:main"
 
 [tool.poetry.plugins."browser_launcher.authenticators"]
 dummy = "browser_launcher.auth.dummy:DummyAuthenticator"
+form_auth = "examples.auth_modules.form_auth:FormAuthenticator"
 
 [build-system]
 requires = ["poetry-core>=1.8"]

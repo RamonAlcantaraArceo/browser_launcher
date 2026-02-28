@@ -278,6 +278,8 @@ def _select_auth_module(
 ) -> Optional[str]:
     """Select an auth module name from user/env scope first, then global scope."""
     logger = get_current_logger()
+    if not logger:
+        logger = logging.getLogger(__name__)
     logger.debug(f"Selecting authentication module for user={user}, env={env}")
 
     user_env_modules = _get_user_env_auth_modules(config_loader, user, env)
@@ -345,6 +347,8 @@ def _run_authentication_attempt(
 ) -> list[dict[str, Any]]:
     """Run one authenticator attempt and return cookies on success."""
     logger = get_current_logger()
+    if not logger:
+        logger = logging.getLogger(__name__)
     logger.info(f"Running authentication attempt for URL: {launch_url}")
     logger.debug(f"Authenticator: {authenticator.__class__.__name__}")
 
