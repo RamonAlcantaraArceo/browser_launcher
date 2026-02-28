@@ -30,6 +30,10 @@ types-pyyaml = "^6.0.12.20250915"
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0"
 pytest-cov = "^7.0.0"
+pytest-xdist = "^3.5.0"
+pytest-randomly = "^3.13.0"
+pytest-timeout = "^2.1.0"
+allure-pytest = "^2.13.0"
 ruff = "^0.15.0"
 mypy = "^1.19.1"
 tox = "^4.46.3"
@@ -100,3 +104,14 @@ markers = [
   "unit: fast tests that do not launch a browser",
   "smoke: launches a browser and performs minimal checks",
 ]
+addopts = ""
+log_cli = false
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+xfail_strict = false
+timeout = 300
