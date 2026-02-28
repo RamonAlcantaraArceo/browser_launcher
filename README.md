@@ -11,7 +11,7 @@ A powerful Python CLI tool for launching and managing browsers (Chrome, Firefox,
 - ⚙️ **Flexible Configuration**: TOML-based configuration with extensive customization
 - 🎮 **Interactive Session**: Real-time keyboard controls for screenshots and cookie saving
 - 📝 **Comprehensive Logging**: Structured logging with configurable verbosity levels
-- 🧪 **Well-Tested**: 130+ tests ensuring reliability and stability
+- 🧪 **Well-Tested**: 300+ tests ensuring reliability and stability
 
 ## 📋 Requirements
 
@@ -272,6 +272,9 @@ poetry shell
 
 ### Running Tests
 
+This project uses [pytest](https://pytest.org/) with advanced plugins for parallel execution, test randomization, and Allure reporting.
+
+**Quick test runs:**
 ```bash
 # Run all tests
 poetry run pytest tests/ -v
@@ -284,6 +287,39 @@ poetry run pytest tests/test_cli_launch.py -v
 
 # Run specific test
 poetry run pytest tests/test_cli_launch.py::test_launch_success -v
+```
+
+**Advanced testing (parallel, random order, Allure reports):**
+
+See [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for comprehensive testing instructions including:
+- Parallel execution with `pytest-xdist` (`-n auto`)
+- Randomized test ordering with `pytest-randomly`
+- Interactive Allure HTML reports with `allure-pytest`
+- Code coverage tracking with `pytest-cov`
+
+**Installing Allure Report Viewer (Optional):**
+
+To view interactive Allure test reports locally:
+
+macOS:
+```bash
+brew install allure
+```
+
+Linux (apt):
+```bash
+sudo apt-add-repository ppa:qameta/allure && sudo apt-get update && sudo apt-get install allure
+```
+
+Windows (Chocolatey):
+```bash
+choco install allure
+```
+
+Then generate and view reports:
+```bash
+poetry run pytest tests/ --alluredir=allure-results
+allure serve allure-results/
 ```
 
 ### Code Quality
