@@ -348,6 +348,7 @@ class CookieConfig:
                     value=cookie["value"],
                     timestamp=ts,
                     ttl_seconds=cookie.get("ttl_seconds", 28800),
+                    domain=domain,
                 )
         return cache
 
@@ -667,13 +668,23 @@ def inject_and_verify_cookies(
                 f"Read {len(browser_cookies)} cookies from browser for"
                 f" domain {target_domains}"
             )
-            # Update cache with cookies from browser
+            # Update cache with cookies from browser, using the config-defined
+            # domain rather than the browser-reported domain.  The browser may
+            # assign a subdomain (e.g. ``artists.apple.com``) or a dot-prefixed
+            # parent domain (e.g. ``.apple.com``), neither of which matches the
+            # canonical domain stored in the config (e.g. ``apple.com``).
             for cookie in browser_cookies:
+                cookie_name = cookie["name"]
+                config_domain = (
+                    valid_cache[cookie_name].domain
+                    if cookie_name in valid_cache and valid_cache[cookie_name].domain
+                    else cookie.get("domain", "")
+                )
                 cookie_config.update_cookie_cache(
                     user,
                     env,
-                    cookie.get("domain", ""),
-                    cookie["name"],
+                    config_domain,
+                    cookie_name,
                     cookie.get("value", ""),
                 )
 

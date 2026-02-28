@@ -537,3 +537,122 @@ def test_inject_and_verify_cookies_expired():
 
     # Verify get_cookies was called (reading from browser always happens)
     mock_driver.get_cookies.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# Tests for get_valid_cookie_cache domain on CacheEntry
+# ---------------------------------------------------------------------------
+@pytest.mark.unit
+def test_get_valid_cookie_cache_sets_domain_on_cache_entry():
+    """get_valid_cookie_cache should populate CacheEntry.domain with the
+    config-defined domain so that downstream consumers (e.g.
+    inject_and_verify_cookies) know the authoritative domain for each cookie."""
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    config_data: dict[str, dict] = {
+        "users": {
+            "alice": {
+                "prod": {
+                    "cookies": {
+                        "myacinfo": {
+                            "domain": "apple.com",
+                            "value": "secret",
+                            "timestamp": now.isoformat(),
+                            "ttl_seconds": 28800,
+                        }
+                    }
+                }
+            }
+        }
+    }
+    config = CookieConfig(config_data)
+    cache = config.get_valid_cookie_cache("alice", "prod", "apple.com")
+
+    assert "myacinfo" in cache
+    assert cache["myacinfo"].domain == "apple.com"
+
+
+# ---------------------------------------------------------------------------
+# Tests for inject_and_verify_cookies domain preservation
+# ---------------------------------------------------------------------------
+@pytest.mark.unit
+def test_inject_and_verify_cookies_preserves_config_domain():
+    """When inject_and_verify_cookies reads cookies back from the browser, it
+    should update the cache using the config-defined domain, NOT the
+    browser-reported domain (which may be a subdomain or dot-prefixed)."""
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    config_data: dict[str, dict] = {
+        "users": {
+            "alice": {
+                "prod": {
+                    "cookies": {
+                        "myacinfo": {
+                            "domain": "apple.com",
+                            "value": "original",
+                            "timestamp": now.isoformat(),
+                            "ttl_seconds": 28800,
+                        }
+                    }
+                }
+            }
+        }
+    }
+    config = CookieConfig(config_data)
+
+    mock_launcher = MagicMock()
+    mock_driver = MagicMock()
+    mock_launcher.driver = mock_driver
+
+    # Browser reports cookie with dot-prefixed domain (common behaviour)
+    mock_driver.get_cookies.return_value = [
+        {"name": "myacinfo", "value": "refreshed", "domain": ".apple.com"},
+    ]
+    mock_driver.get_cookie.return_value = None
+
+    inject_and_verify_cookies(mock_launcher, "alice", "prod", config)
+
+    # After injection + readback, the cookie in config should still have
+    # domain "apple.com" — not ".apple.com" or "artists.apple.com".
+    stored = config.config_data["users"]["alice"]["prod"]["cookies"]["myacinfo"]
+    assert stored["domain"] == "apple.com"
+    assert stored["value"] == "refreshed"
+
+
+@pytest.mark.unit
+def test_inject_and_verify_cookies_does_not_use_subdomain():
+    """When the browser assigns a cookie to a subdomain (e.g.
+    artists.apple.com), inject_and_verify_cookies should still save it with
+    the config-defined parent domain (apple.com)."""
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    config_data: dict[str, dict] = {
+        "users": {
+            "alice": {
+                "prod": {
+                    "cookies": {
+                        "myacinfo": {
+                            "domain": "apple.com",
+                            "value": "original",
+                            "timestamp": now.isoformat(),
+                            "ttl_seconds": 28800,
+                        }
+                    }
+                }
+            }
+        }
+    }
+    config = CookieConfig(config_data)
+
+    mock_launcher = MagicMock()
+    mock_driver = MagicMock()
+    mock_launcher.driver = mock_driver
+
+    # Browser reports cookie on the subdomain (Selenium quirk)
+    mock_driver.get_cookies.return_value = [
+        {"name": "myacinfo", "value": "updated", "domain": "artists.apple.com"},
+    ]
+    mock_driver.get_cookie.return_value = None
+
+    inject_and_verify_cookies(mock_launcher, "alice", "prod", config)
+
+    stored = config.config_data["users"]["alice"]["prod"]["cookies"]["myacinfo"]
+    assert stored["domain"] == "apple.com"
+    assert stored["value"] == "updated"

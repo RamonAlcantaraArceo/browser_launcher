@@ -17,8 +17,9 @@
             "args": [
                 "launch",
                 "--browser=chrome",
-                "https://google.com",
-                "--locale=fr-FR",
+                "https://artists.apple.com",
+                // "https://google.com",
+                "--locale=es-MX",
                 // "--headless"
                 // "--user=default",
                 // "--env=prod",

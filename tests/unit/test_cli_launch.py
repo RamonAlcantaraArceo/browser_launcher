@@ -4,7 +4,13 @@ import pytest
 from typer.testing import CliRunner
 
 from browser_launcher.browsers.base import BrowserConfig
-from browser_launcher.cli import app, cache_cookies_for_session
+from browser_launcher.cli import (
+    _cache_auth_result_cookies,
+    _normalize_cookie_domain,
+    _resolve_cookie_domain,
+    app,
+    cache_cookies_for_session,
+)
 from browser_launcher.cookies import CookieConfig
 
 runner = CliRunner()
@@ -1076,3 +1082,229 @@ def test_cache_cookies_for_session_duplicate_cookie_names():
         # Verify success message shows only 1 cookie
         success_call = mock_console.print.call_args_list[-1][0][0]
         assert "✅ Cached 1 cookies for" in success_call
+
+
+# ---------------------------------------------------------------------------
+# Tests for _normalize_cookie_domain
+# ---------------------------------------------------------------------------
+class TestNormalizeCookieDomain:
+    """Tests for the _normalize_cookie_domain helper."""
+
+    @pytest.mark.unit
+    def test_strips_leading_dot(self):
+        assert _normalize_cookie_domain(".apple.com") == "apple.com"
+
+    @pytest.mark.unit
+    def test_no_leading_dot(self):
+        assert _normalize_cookie_domain("apple.com") == "apple.com"
+
+    @pytest.mark.unit
+    def test_multiple_leading_dots(self):
+        assert _normalize_cookie_domain("..apple.com") == "apple.com"
+
+    @pytest.mark.unit
+    def test_empty_string(self):
+        assert _normalize_cookie_domain("") == ""
+
+    @pytest.mark.unit
+    def test_none_passthrough(self):
+        # None should be returned as-is (falsy path)
+        assert _normalize_cookie_domain(None) is None  # type: ignore[arg-type]
+
+    @pytest.mark.unit
+    def test_subdomain_preserved(self):
+        assert _normalize_cookie_domain("artists.apple.com") == "artists.apple.com"
+
+
+# ---------------------------------------------------------------------------
+# Tests for _resolve_cookie_domain
+# ---------------------------------------------------------------------------
+class TestResolveCookieDomain:
+    """Tests for the _resolve_cookie_domain helper."""
+
+    @pytest.mark.unit
+    def test_prefers_config_domain(self):
+        """Config domain takes precedence over browser domain."""
+        config_data = {
+            "users": {
+                "alice": {
+                    "prod": {
+                        "cookies": {
+                            "myacinfo": {"domain": "apple.com", "value": "x"},
+                        }
+                    }
+                }
+            }
+        }
+        result = _resolve_cookie_domain(
+            cookie_name="myacinfo",
+            browser_domain=".apple.com",
+            cookie_config_data=config_data,
+            user="alice",
+            env="prod",
+        )
+        assert result == "apple.com"
+
+    @pytest.mark.unit
+    def test_falls_back_to_normalised_browser_domain(self):
+        """When cookie is not in config, use normalised browser domain."""
+        config_data = {"users": {"alice": {"prod": {"cookies": {}}}}}
+        result = _resolve_cookie_domain(
+            cookie_name="unknown_cookie",
+            browser_domain=".example.com",
+            cookie_config_data=config_data,
+            user="alice",
+            env="prod",
+        )
+        assert result == "example.com"
+
+    @pytest.mark.unit
+    def test_normalises_config_domain_with_leading_dot(self):
+        """Config domain with leading dot is also normalised."""
+        config_data = {
+            "users": {
+                "alice": {
+                    "prod": {
+                        "cookies": {
+                            "sid": {"domain": ".example.com", "value": "v"},
+                        }
+                    }
+                }
+            }
+        }
+        result = _resolve_cookie_domain(
+            cookie_name="sid",
+            browser_domain=".example.com",
+            cookie_config_data=config_data,
+            user="alice",
+            env="prod",
+        )
+        assert result == "example.com"
+
+    @pytest.mark.unit
+    def test_returns_none_when_no_domain_available(self):
+        """Returns None when neither config nor browser domain is available."""
+        config_data = {"users": {"alice": {"prod": {"cookies": {}}}}}
+        result = _resolve_cookie_domain(
+            cookie_name="missing",
+            browser_domain=None,
+            cookie_config_data=config_data,
+            user="alice",
+            env="prod",
+        )
+        assert result is None
+
+    @pytest.mark.unit
+    def test_handles_missing_config_sections(self):
+        """Gracefully handles missing users/env/cookies sections."""
+        result = _resolve_cookie_domain(
+            cookie_name="myacinfo",
+            browser_domain=".apple.com",
+            cookie_config_data={},
+            user="alice",
+            env="prod",
+        )
+        assert result == "apple.com"
+
+
+# ---------------------------------------------------------------------------
+# Tests for _cache_auth_result_cookies domain resolution
+# ---------------------------------------------------------------------------
+class TestCacheAuthResultCookiesDomainResolution:
+    """Tests that _cache_auth_result_cookies resolves domains correctly."""
+
+    @pytest.mark.unit
+    def test_uses_config_domain_not_browser_domain(self):
+        """Auth cookies should be cached with config domain, not browser domain."""
+        mock_browser = MagicMock()
+        mock_cookie_config = MagicMock()
+        mock_cookie_config.config_data = {
+            "users": {
+                "alice": {
+                    "prod": {
+                        "cookies": {
+                            "myacinfo": {"domain": "apple.com", "value": "old"},
+                        }
+                    }
+                }
+            }
+        }
+        mock_logger = MagicMock()
+        mock_console = MagicMock()
+
+        auth_cookies = [
+            {"name": "myacinfo", "value": "newval", "domain": ".apple.com"},
+        ]
+
+        _cache_auth_result_cookies(
+            auth_cookies=auth_cookies,
+            browser_controller=mock_browser,
+            cookie_config=mock_cookie_config,
+            user="alice",
+            env="prod",
+            domain="artists.apple.com",  # launch URL domain — should NOT be used
+            logger=mock_logger,
+            console=mock_console,
+        )
+
+        # Should be called with config domain "apple.com", not ".apple.com" or
+        # "artists.apple.com"
+        mock_cookie_config.update_cookie_cache.assert_called_once_with(
+            "alice", "prod", "apple.com", "myacinfo", "newval"
+        )
+
+    @pytest.mark.unit
+    def test_falls_back_to_normalised_browser_domain_for_unknown_cookie(self):
+        """Cookies not in config fall back to normalised browser domain."""
+        mock_browser = MagicMock()
+        mock_cookie_config = MagicMock()
+        mock_cookie_config.config_data = {"users": {"alice": {"prod": {"cookies": {}}}}}
+        mock_logger = MagicMock()
+        mock_console = MagicMock()
+
+        auth_cookies = [
+            {"name": "new_cookie", "value": "val", "domain": ".example.com"},
+        ]
+
+        _cache_auth_result_cookies(
+            auth_cookies=auth_cookies,
+            browser_controller=mock_browser,
+            cookie_config=mock_cookie_config,
+            user="alice",
+            env="prod",
+            domain="sub.example.com",
+            logger=mock_logger,
+            console=mock_console,
+        )
+
+        mock_cookie_config.update_cookie_cache.assert_called_once_with(
+            "alice", "prod", "example.com", "new_cookie", "val"
+        )
+
+    @pytest.mark.unit
+    def test_falls_back_to_normalised_launch_domain_when_no_browser_domain(self):
+        """When cookie has no domain, use normalised launch URL domain."""
+        mock_browser = MagicMock()
+        mock_cookie_config = MagicMock()
+        mock_cookie_config.config_data = {"users": {"alice": {"prod": {"cookies": {}}}}}
+        mock_logger = MagicMock()
+        mock_console = MagicMock()
+
+        auth_cookies = [
+            {"name": "session", "value": "abc"},  # no "domain" key
+        ]
+
+        _cache_auth_result_cookies(
+            auth_cookies=auth_cookies,
+            browser_controller=mock_browser,
+            cookie_config=mock_cookie_config,
+            user="alice",
+            env="prod",
+            domain=".example.com",
+            logger=mock_logger,
+            console=mock_console,
+        )
+
+        mock_cookie_config.update_cookie_cache.assert_called_once_with(
+            "alice", "prod", "example.com", "session", "abc"
+        )

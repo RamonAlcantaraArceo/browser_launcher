@@ -129,6 +129,69 @@ def _setup_logging(
     )
 
 
+def _normalize_cookie_domain(domain: str) -> str:
+    """Normalize a cookie domain by stripping leading dots.
+
+    Browsers often return cookie domains with a leading dot (e.g.,
+    ``.apple.com``), but the config stores them without (e.g.,
+    ``apple.com``). This ensures consistent domain representation for
+    cache lookups.
+
+    Args:
+        domain: The raw cookie domain string from the browser or config.
+
+    Returns:
+        The domain string with any leading dot removed.
+    """
+    return domain.lstrip(".") if domain else domain
+
+
+def _resolve_cookie_domain(
+    cookie_name: str,
+    browser_domain: Optional[str],
+    cookie_config_data: dict[str, Any],
+    user: str,
+    env: str,
+) -> Optional[str]:
+    """Resolve the correct domain for a cookie, preferring the config value.
+
+    Looks up the cookie name in the ``[users.{user}.{env}.cookies]``
+    configuration to find the authoritative domain.  If the cookie is not
+    found in config, falls back to the normalised browser-reported domain.
+
+    Args:
+        cookie_name: The name of the cookie to resolve the domain for.
+        browser_domain: The domain reported by the browser for this cookie.
+        cookie_config_data: The full configuration data structure.
+        user: The user identifier for config lookup.
+        env: The environment name for config lookup.
+
+    Returns:
+        The resolved domain string, or ``None`` if no domain could be
+        determined.
+    """
+    # Try config first (authoritative source)
+    try:
+        user_env_cookies = (
+            cookie_config_data.get("users", {})
+            .get(user, {})
+            .get(env, {})
+            .get("cookies", {})
+        )
+        if cookie_name in user_env_cookies:
+            config_domain = user_env_cookies[cookie_name].get("domain")
+            if config_domain:
+                return _normalize_cookie_domain(config_domain)
+    except (KeyError, TypeError, AttributeError):
+        pass
+
+    # Fall back to normalised browser domain
+    if browser_domain:
+        return _normalize_cookie_domain(browser_domain)
+
+    return None
+
+
 def cache_cookies_for_session(
     browser_controller: Any,
     user: str,
@@ -318,13 +381,35 @@ def _cache_auth_result_cookies(
     cached_count = 0
     for cookie in auth_cookies:
         cookie_name = cookie.get("name")
-        cookie_domain = cookie.get("domain") or domain
+        raw_browser_domain = cookie.get("domain")
+
+        # Resolve domain: prefer config-defined domain, then normalised
+        # browser domain, then normalised launch-URL domain.
+        cookie_domain = _resolve_cookie_domain(
+            cookie_name=cookie_name or "",
+            browser_domain=raw_browser_domain,
+            cookie_config_data=cookie_config.config_data,
+            user=user,
+            env=env,
+        )
+        if not cookie_domain and domain:
+            cookie_domain = _normalize_cookie_domain(domain)
+
         if not cookie_name or not cookie_domain:
             logger.warning(
                 f"Skipping cookie with missing name or domain: "
                 f"name={cookie_name}, domain={cookie_domain}"
             )
             continue
+
+        if (
+            raw_browser_domain
+            and _normalize_cookie_domain(raw_browser_domain) != cookie_domain
+        ):
+            logger.info(
+                f"Cookie '{cookie_name}' domain resolved from config: "
+                f"browser='{raw_browser_domain}' -> config='{cookie_domain}'"
+            )
 
         logger.debug(
             f"Updating cookie cache: {cookie_name} for {user}/{env}/{cookie_domain}"
