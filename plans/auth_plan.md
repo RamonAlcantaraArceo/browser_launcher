@@ -50,6 +50,7 @@ User: Help me generate a step by step plan in the mode of prompts that can be us
    - Authentication attempts and results (INFO/WARNING level)
    - Configuration validation issues (WARNING level)
    - Detailed error tracing for module failures (DEBUG level)
+   - the authentication to be used is just dummy so any credentials passed will work, and will return a known cooky name with a random value with and short expiry time.
 
 7. **Create example authentication module** in examples/auth_modules/form_auth.py
    - Implement `AuthenticatorBase` for basic form authentication

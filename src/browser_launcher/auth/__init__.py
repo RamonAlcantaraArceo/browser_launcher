@@ -6,6 +6,7 @@ authentication workflows with browsers.
 
 from .base import AuthenticatorBase
 from .config import AuthConfig
+from .dummy import DummyAuthenticator
 from .exceptions import (
     AuthConfigError,
     AuthenticationFailedError,
@@ -16,6 +17,7 @@ from .exceptions import (
 )
 from .factory import AuthFactory
 from .result import AuthResult
+from .retry import AuthRetryHandler
 
 __all__ = [
     # Base classes
@@ -26,6 +28,10 @@ __all__ = [
     "AuthConfig",
     # Result data
     "AuthResult",
+    # Retry handler
+    "AuthRetryHandler",
+    # Dummy authenticator
+    "DummyAuthenticator",
     # Exceptions
     "AuthError",
     "AuthConfigError",

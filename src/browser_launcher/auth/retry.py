@@ -114,9 +114,7 @@ class AuthRetryHandler:
                 hide_input=hide_input,
             )
 
-        self.logger.debug(
-            f"Prompted for {len(updated_credentials)} credential fields"
-        )
+        self.logger.debug(f"Prompted for {len(updated_credentials)} credential fields")
         return updated_credentials
 
     def increment_attempt(self) -> None:

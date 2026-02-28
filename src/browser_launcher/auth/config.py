@@ -1,8 +1,11 @@
 """Authentication configuration dataclass."""
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -57,27 +60,43 @@ class AuthConfig:
 
     def __post_init__(self):
         """Validate AuthConfig after initialization."""
+        logger.debug(
+            f"Validating AuthConfig: timeout={self.timeout_seconds}s, "
+            f"retry={self.retry_attempts}, headless={self.headless}"
+        )
+
         if self.timeout_seconds <= 0:
+            logger.error(f"Invalid timeout_seconds: {self.timeout_seconds}")
             raise ValueError("timeout_seconds must be positive")
 
         if self.retry_attempts < 0:
+            logger.error(f"Invalid retry_attempts: {self.retry_attempts}")
             raise ValueError("retry_attempts cannot be negative")
 
         if self.retry_delay_seconds < 0:
+            logger.error(f"Invalid retry_delay_seconds: {self.retry_delay_seconds}")
             raise ValueError("retry_delay_seconds cannot be negative")
 
         if self.page_load_timeout <= 0:
+            logger.error(f"Invalid page_load_timeout: {self.page_load_timeout}")
             raise ValueError("page_load_timeout must be positive")
 
         if self.element_wait_timeout <= 0:
+            logger.error(f"Invalid element_wait_timeout: {self.element_wait_timeout}")
             raise ValueError("element_wait_timeout must be positive")
 
         if len(self.window_size) != 2 or any(dim <= 0 for dim in self.window_size):
+            logger.error(f"Invalid window_size: {self.window_size}")
             raise ValueError("window_size must be a tuple of two positive integers")
 
         # Convert screenshot_directory to Path if it's a string
         if isinstance(self.screenshot_directory, str):
+            logger.debug(
+                f"Converting screenshot_directory to Path: {self.screenshot_directory}"
+            )
             self.screenshot_directory = Path(self.screenshot_directory)
+
+        logger.debug("AuthConfig validation successful")
 
     def get_credential(self, key: str, default: Any = None) -> Any:
         """Get a credential value by key.
@@ -110,8 +129,21 @@ class AuthConfig:
             True if all required cookies are present, False otherwise
         """
         if not self.required_cookies:
+            logger.debug("No required cookies specified")
             return True
-        return all(name in cookie_names for name in self.required_cookies)
+
+        missing_cookies = [
+            name for name in self.required_cookies if name not in cookie_names
+        ]
+
+        if missing_cookies:
+            logger.warning(
+                f"Missing required cookies: {missing_cookies}. Present: {cookie_names}"
+            )
+            return False
+
+        logger.debug(f"All required cookies present: {self.required_cookies}")
+        return True
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert AuthConfig to dictionary format.

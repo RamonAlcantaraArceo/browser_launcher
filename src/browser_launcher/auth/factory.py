@@ -41,13 +41,19 @@ class AuthFactory:
             AuthError: If module discovery or validation fails
         """
         if cls._discovery_cache is not None and not refresh_cache:
+            logger.debug("Using cached authentication module discovery results")
             return cls._discovery_cache.copy()
 
+        logger.info("Starting authentication module discovery")
         discovered = {}
 
         try:
             # Discover entry points for authentication modules
             auth_entry_points = entry_points(group="browser_launcher.authenticators")
+            logger.debug(
+                f"Found {len(list(auth_entry_points))} entry points in "
+                f"'browser_launcher.authenticators' group"
+            )
 
             for entry_point in auth_entry_points:
                 module_name = entry_point.name
@@ -55,12 +61,17 @@ class AuthFactory:
                 try:
                     logger.debug(f"Loading authentication module: {module_name}")
                     authenticator_class = entry_point.load()
+                    logger.debug(
+                        f"Loaded class {authenticator_class.__name__} from "
+                        f"{authenticator_class.__module__}"
+                    )
 
                     # Validate that the class implements AuthenticatorBase
                     if not issubclass(authenticator_class, AuthenticatorBase):
                         logger.warning(
                             f"Module '{module_name}' does not implement "
-                            f"AuthenticatorBase, skipping"
+                            f"AuthenticatorBase (got {authenticator_class.__name__}), "
+                            f"skipping"
                         )
                         continue
 
@@ -73,11 +84,19 @@ class AuthFactory:
                         continue
 
                     discovered[module_name] = authenticator_class
-                    logger.info(f"Discovered authentication module: {module_name}")
+                    logger.info(
+                        f"Discovered authentication module: {module_name} "
+                        f"({authenticator_class.__name__})"
+                    )
 
                 except Exception as e:
                     logger.error(
-                        f"Failed to load authentication module '{module_name}': {e}"
+                        f"Failed to load authentication module '{module_name}': {e}",
+                        exc_info=True,
+                    )
+                    logger.debug(
+                        f"Module load failure details - entry_point: {entry_point}, "
+                        f"error type: {type(e).__name__}"
                     )
                     continue
 
@@ -119,15 +138,27 @@ class AuthFactory:
             AuthConfigError: If module is not found or config is invalid
             AuthError: If module creation fails
         """
+        logger.debug(
+            f"Creating authentication module '{module_name}' with config: "
+            f"timeout={config.timeout_seconds}s, retry={config.retry_attempts}, "
+            f"headless={config.headless}"
+        )
+
         # Check cache first
         if module_name in cls._module_cache:
+            logger.debug(f"Using cached authenticator class for '{module_name}'")
             authenticator_class = cls._module_cache[module_name]
         else:
             # Discover modules if not in cache
+            logger.debug(f"Discovering modules to find '{module_name}'")
             available_modules = cls.discover_modules()
 
             if module_name not in available_modules:
                 available = ", ".join(available_modules.keys())
+                logger.error(
+                    f"Authentication module '{module_name}' not found. "
+                    f"Available: {available}"
+                )
                 raise AuthConfigError(
                     f"Authentication module '{module_name}' not found",
                     f"Available modules: {available}",
@@ -135,23 +166,39 @@ class AuthFactory:
 
             authenticator_class = available_modules[module_name]
             cls._module_cache[module_name] = authenticator_class
+            logger.debug(f"Cached authenticator class '{module_name}'")
 
         # Validate configuration if requested
         if validate_config:
+            logger.debug(f"Validating configuration for module '{module_name}'")
             if not cls.validate_module_config(authenticator_class, config):
+                logger.warning(
+                    f"Configuration validation failed for module '{module_name}'"
+                )
                 raise AuthConfigError(
                     f"Invalid configuration for module '{module_name}'",
                     "Configuration validation failed",
                 )
+            logger.debug(f"Configuration validated successfully for '{module_name}'")
 
         try:
             logger.debug(f"Creating authentication module instance: {module_name}")
             authenticator = authenticator_class(config)
-            logger.info(f"Created authentication module: {module_name}")
+            logger.info(
+                f"Created authentication module: {module_name} "
+                f"({authenticator_class.__name__})"
+            )
             return authenticator
 
         except Exception as e:
-            logger.error(f"Failed to create authentication module '{module_name}': {e}")
+            logger.error(
+                f"Failed to create authentication module '{module_name}': {e}",
+                exc_info=True,
+            )
+            logger.debug(
+                f"Module creation failure details - class: {authenticator_class}, "
+                f"error type: {type(e).__name__}"
+            )
             raise AuthError(
                 f"Failed to create authentication module '{module_name}': {e}"
             ) from e
@@ -172,25 +219,54 @@ class AuthFactory:
         Returns:
             True if configuration is valid, False otherwise
         """
+        logger.debug(
+            f"Validating config for {authenticator_class.__name__}: "
+            f"timeout={config.timeout_seconds}s, retry={config.retry_attempts}"
+        )
+
         try:
             # Check if the authenticator class has custom validation
             if hasattr(authenticator_class, "validate_config"):
-                return authenticator_class.validate_config(config)
+                logger.debug(
+                    f"{authenticator_class.__name__} has custom validate_config method"
+                )
+                result = authenticator_class.validate_config(config)
+                if result:
+                    logger.debug(
+                        f"Config validation passed for {authenticator_class.__name__}"
+                    )
+                else:
+                    logger.warning(
+                        f"Config validation failed for {authenticator_class.__name__}"
+                    )
+                return result
 
             # Fall back to basic AuthConfig validation
+            logger.debug(
+                f"Using basic config validation for {authenticator_class.__name__}"
+            )
+
             if config.timeout_seconds <= 0:
-                logger.error("Invalid timeout_seconds in auth config")
+                logger.warning(
+                    f"Invalid timeout_seconds in auth config: {config.timeout_seconds}"
+                )
                 return False
 
             if config.retry_attempts < 0:
-                logger.error("Invalid retry_attempts in auth config")
+                logger.warning(
+                    f"Invalid retry_attempts in auth config: {config.retry_attempts}"
+                )
                 return False
 
+            logger.debug(
+                f"Basic config validation passed for {authenticator_class.__name__}"
+            )
             return True
 
         except Exception as e:
             logger.error(
-                f"Error validating config for {authenticator_class.__name__}: {e}"
+                f"Error validating config for {authenticator_class.__name__}: {e}",
+                exc_info=True,
             )
             return False
 

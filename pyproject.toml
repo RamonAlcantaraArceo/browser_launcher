@@ -34,6 +34,9 @@ tox = "^4.46.3"
 [tool.poetry.scripts]
 browser-launcher = "browser_launcher.__main__:main"
 
+[tool.poetry.plugins."browser_launcher.authenticators"]
+dummy = "browser_launcher.auth.dummy:DummyAuthenticator"
+
 [build-system]
 requires = ["poetry-core>=1.8"]
 build-backend = "poetry.core.masonry.api"

@@ -277,14 +277,22 @@ def _select_auth_module(
     env: str,
 ) -> Optional[str]:
     """Select an auth module name from user/env scope first, then global scope."""
+    logger = get_current_logger()
+    logger.debug(f"Selecting authentication module for user={user}, env={env}")
+
     user_env_modules = _get_user_env_auth_modules(config_loader, user, env)
     if user_env_modules:
-        return user_env_modules[0]
+        selected = user_env_modules[0]
+        logger.info(f"Selected auth module '{selected}' from user/env configuration")
+        return selected
 
     configured_modules = config_loader.get_available_auth_modules()
     if configured_modules:
-        return next(iter(configured_modules.keys()))
+        selected = next(iter(configured_modules.keys()))
+        logger.info(f"Selected auth module '{selected}' from global configuration")
+        return selected
 
+    logger.debug("No authentication modules configured")
     return None
 
 
@@ -299,13 +307,26 @@ def _cache_auth_result_cookies(
     console: Console,
 ) -> None:
     """Inject authenticated cookies into browser and persist cookie cache."""
-    write_cookies_to_browser(browser_controller.driver, auth_cookies)
+    logger.info(f"Caching {len(auth_cookies)} authentication cookies")
+    logger.debug(f"Cookie names: {[c.get('name') for c in auth_cookies]}")
 
+    write_cookies_to_browser(browser_controller.driver, auth_cookies)
+    logger.debug("Cookies written to browser")
+
+    cached_count = 0
     for cookie in auth_cookies:
         cookie_name = cookie.get("name")
         cookie_domain = cookie.get("domain") or domain
         if not cookie_name or not cookie_domain:
+            logger.warning(
+                f"Skipping cookie with missing name or domain: "
+                f"name={cookie_name}, domain={cookie_domain}"
+            )
             continue
+
+        logger.debug(
+            f"Updating cookie cache: {cookie_name} for {user}/{env}/{cookie_domain}"
+        )
         cookie_config.update_cookie_cache(
             user,
             env,
@@ -313,7 +334,9 @@ def _cache_auth_result_cookies(
             cookie_name,
             cookie.get("value", ""),
         )
+        cached_count += 1
 
+    logger.info(f"Cached {cached_count} cookies to disk")
     _persist_cookie_config(cookie_config, logger, console)
 
 
@@ -321,12 +344,39 @@ def _run_authentication_attempt(
     authenticator: Any, launch_url: str
 ) -> list[dict[str, Any]]:
     """Run one authenticator attempt and return cookies on success."""
-    auth_result = authenticator.authenticate(launch_url)
-    if not auth_result.success:
-        raise RuntimeError(auth_result.error_message or "Authentication failed")
-    if not auth_result.cookies:
-        raise RuntimeError("Authentication returned no cookies")
-    return auth_result.cookies
+    logger = get_current_logger()
+    logger.info(f"Running authentication attempt for URL: {launch_url}")
+    logger.debug(f"Authenticator: {authenticator.__class__.__name__}")
+
+    try:
+        auth_result = authenticator.authenticate(launch_url)
+
+        logger.debug(
+            f"Authentication result: success={auth_result.success}, "
+            f"cookies={auth_result.cookie_count}, "
+            f"duration={auth_result.duration_seconds}s"
+        )
+
+        if not auth_result.success:
+            error_msg = auth_result.error_message or "Authentication failed"
+            logger.warning(f"Authentication failed: {error_msg}")
+            raise RuntimeError(error_msg)
+
+        if not auth_result.cookies:
+            logger.warning("Authentication succeeded but returned no cookies")
+            raise RuntimeError("Authentication returned no cookies")
+
+        logger.info(
+            f"Authentication successful: {auth_result.cookie_count} cookies obtained"
+        )
+        return auth_result.cookies
+
+    except Exception as e:
+        logger.error(
+            f"Authentication attempt failed with {type(e).__name__}: {e}",
+            exc_info=True,
+        )
+        raise
 
 
 def attempt_authentication(
@@ -341,6 +391,10 @@ def attempt_authentication(
     console: Console,
 ) -> Optional[list[dict[str, Any]]]:
     """Attempt authentication using cache first, then auth module with retries."""
+    logger.info(f"Starting authentication attempt for {user}/{env}")
+    logger.debug(f"Launch URL: {launch_url}, Domain: {domain}")
+
+    # Try cached cookies first
     injected_cookies = inject_and_verify_cookies(
         browser_controller,
         user,
@@ -353,20 +407,44 @@ def attempt_authentication(
         )
         return injected_cookies
 
+    logger.debug("No valid cached cookies found, attempting fresh authentication")
+
     module_name = _select_auth_module(config_loader, user, env)
     if not module_name:
         logger.info("No authentication module configured; continuing without auth")
         return None
 
     logger.info(f"Attempting authentication with module '{module_name}'")
-    auth_config = config_loader.get_auth_config(
-        module_name=module_name,
-        user=user,
-        env=env,
-    )
-    authenticator = AuthFactory.create(module_name, auth_config)
+
+    try:
+        auth_config = config_loader.get_auth_config(
+            module_name=module_name,
+            user=user,
+            env=env,
+        )
+        logger.debug(
+            f"Loaded auth config: timeout={auth_config.timeout_seconds}s, "
+            f"retry={auth_config.retry_attempts}"
+        )
+    except Exception as e:
+        logger.error(
+            f"Failed to load auth config for '{module_name}': {e}", exc_info=True
+        )
+        logger.warning("Continuing without authentication due to config error")
+        return None
+
+    try:
+        authenticator = AuthFactory.create(module_name, auth_config)
+    except Exception as e:
+        logger.error(
+            f"Failed to create authenticator '{module_name}': {e}",
+            exc_info=True,
+        )
+        logger.warning("Continuing without authentication due to creation error")
+        return None
 
     if hasattr(authenticator, "setup_driver"):
+        logger.debug("Setting up authenticator driver")
         authenticator.setup_driver(browser_controller.driver)
 
     # Create retry handler
@@ -377,9 +455,13 @@ def attempt_authentication(
     )
 
     total_attempts = max(1, auth_config.retry_attempts + 1)
+    logger.info(f"Starting authentication with up to {total_attempts} attempts")
+
     while retry_handler.current_attempt < total_attempts:
         retry_handler.increment_attempt()
         attempt = retry_handler.current_attempt
+
+        logger.info(f"Authentication attempt {attempt}/{total_attempts}")
 
         try:
             auth_cookies = _run_authentication_attempt(authenticator, launch_url)
@@ -408,13 +490,18 @@ def attempt_authentication(
 
             # Check if we should retry
             if retry_handler.current_attempt >= total_attempts:
+                logger.warning(
+                    f"Maximum authentication attempts ({total_attempts}) reached"
+                )
                 break
 
             if not retry_handler.should_retry(error_message=error_msg):
+                logger.info("User chose not to retry authentication")
                 break
 
             # Update credentials if available
             if auth_config.credentials:
+                logger.debug("Prompting for updated credentials")
                 auth_config.credentials = retry_handler.prompt_for_credentials()
 
     logger.warning(
@@ -681,8 +768,7 @@ def launch(  # noqa: C901
         cookie_config = CookieConfig(cookie_config_data)
 
         logger.info(
-            f"Attempting authentication for domain {domain} "
-            f"(user={user}, env={env})"
+            f"Attempting authentication for domain {domain} (user={user}, env={env})"
         )
 
         injected_cookies = attempt_authentication(
