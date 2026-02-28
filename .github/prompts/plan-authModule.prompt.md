@@ -70,12 +70,12 @@ User: Help me generate a step by step plan in the mode of prompts that can be us
    - `tests/unit/test_form_auth.py` — 31 tests for FormAuthenticator
    - All mocked external auth services and entry points. Total: 283 tests passing.
 
-9. **Update configuration templates** in default_config.toml
+9. **Update configuration templates** in default_config.toml **[IMPLEMENTED]**
    - Add `[auth]` section with default settings
    - Document configuration structure and examples
    - Include timeout, retry, and module settings
 
-   **Status:** Not yet started.
+   `[auth]` section added to `default_config.toml` with all global defaults documented, commented module examples (`form_auth`, `oauth`, `dummy`), and per-user/per-env override examples with resolution order. Two new tests in `test_config.py` verify the shipped template loads a valid `AuthConfig` and has no active module configs.
 
 **Verification**
 - Run `poetry run pytest tests/unit/test_auth_*.py -v` for unit tests

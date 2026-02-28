@@ -48,21 +48,33 @@ binary_path = ""
 headless = false
 
 # Authentication Configuration
+# ──────────────────────────────────────────────────────────────────────
+# The auth framework discovers authentication modules via Python entry
+# points registered under the "browser_launcher.authenticators" group.
+# Settings here act as global defaults.  Module-specific and
+# user/env-specific overrides are supported (see examples below).
+# ──────────────────────────────────────────────────────────────────────
 [auth]
 # Global authentication defaults
-timeout_seconds = 30
-retry_attempts = 3
-retry_delay_seconds = 1.0
-headless = true
-page_load_timeout = 20
-element_wait_timeout = 10
-screenshot_on_failure = false
+timeout_seconds = 30        # Max seconds to wait for auth to complete
+retry_attempts = 3          # Number of retry attempts on failure
+retry_delay_seconds = 1.0   # Delay between retries (seconds)
+headless = true             # Run auth browser in headless mode
+page_load_timeout = 20      # Max seconds to wait for page loads
+element_wait_timeout = 10   # Max seconds to wait for page elements
+screenshot_on_failure = false  # Take screenshot when auth fails
+# screenshot_directory = "/tmp/auth_screenshots"  # Where to save failure screenshots
+# user_agent = ""           # Custom user agent string (empty = browser default)
+# window_size = [1920, 1080]  # Browser window size [width, height]
+# allowed_domains = []      # Restrict auth to these domains (empty = allow all)
+# required_cookies = []     # Cookie names that must be present after auth
 
-# Example module-specific configurations
+# ── Module-specific configuration ─────────────────────────────────────
+# Each auth module can have its own section: [auth.<module_name>]
+# Values here override the global [auth] defaults for that module.
 #
-# Form-based authentication (examples.auth_modules.form_auth:FormAuthenticator)
-# Registered as "form_auth" entry point.  Supply username/password under
-# credentials and (optionally) override CSS selectors via custom_options.
+# Form-based authentication (entry point: "form_auth")
+# Registered class: examples.auth_modules.form_auth:FormAuthenticator
 #
 # [auth.form_auth]
 # timeout_seconds = 45
@@ -83,12 +95,23 @@ screenshot_on_failure = false
 #   post_login_delay = 1.0,
 # }
 
+# OAuth / third-party auth example (hypothetical entry point: "oauth")
+#
 # [auth.oauth]
 # timeout_seconds = 60
 # credentials = { client_id = "your_client_id", redirect_uri = "https://localhost:8080/callback" }
 # custom_options = { popup_window = true, auto_close = true }
 
-# User and environment-specific auth configuration examples
+# Dummy authenticator (entry point: "dummy") — always succeeds, useful for testing
+# No extra configuration required; ships with the package.
+
+# ── Per-user / per-environment overrides ──────────────────────────────
+# Resolution order (later overrides earlier):
+#   1. [auth]                           — global defaults
+#   2. [auth.<module>]                  — module defaults
+#   3. [users.<user>.<env>.auth]        — user/env overrides
+#   4. [users.<user>.<env>.auth.<mod>]  — user/env module overrides
+#
 # [users.alice.prod.auth]
 # timeout_seconds = 45
 # screenshot_on_failure = true

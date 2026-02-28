@@ -349,3 +349,54 @@ def test_get_available_auth_modules_empty_auth_section(tmp_path):
 
     modules = config.get_available_auth_modules()
     assert modules == {}
+
+
+@pytest.mark.unit
+def test_default_config_toml_auth_section_loads_valid_auth_config():
+    """Verify the shipped default_config.toml produces a valid AuthConfig."""
+    default_config_path = (
+        Path(__file__).parent.parent.parent
+        / "src"
+        / "browser_launcher"
+        / "assets"
+        / "default_config.toml"
+    )
+    assert default_config_path.exists(), (
+        f"default_config.toml not found: {default_config_path}"
+    )
+
+    config = BrowserLauncherConfig(default_config_path)
+    auth_config = config.get_auth_config()
+
+    # Should match the values in default_config.toml [auth] section
+    assert auth_config.timeout_seconds == 30
+    assert auth_config.retry_attempts == 3
+    assert auth_config.retry_delay_seconds == 1.0
+    assert auth_config.headless is True
+    assert auth_config.page_load_timeout == 20
+    assert auth_config.element_wait_timeout == 10
+    assert auth_config.screenshot_on_failure is False
+
+    # Fields not set in [auth] should keep AuthConfig dataclass defaults
+    assert auth_config.credentials == {}
+    assert auth_config.custom_options == {}
+    assert auth_config.user_agent is None
+    assert auth_config.window_size == (1920, 1080)
+    assert auth_config.screenshot_directory is None
+    assert auth_config.allowed_domains == []
+    assert auth_config.required_cookies == []
+
+
+@pytest.mark.unit
+def test_default_config_toml_has_no_module_configs_by_default():
+    """Shipped default_config.toml should have no active module configs."""
+    default_config_path = (
+        Path(__file__).parent.parent.parent
+        / "src"
+        / "browser_launcher"
+        / "assets"
+        / "default_config.toml"
+    )
+    config = BrowserLauncherConfig(default_config_path)
+    modules = config.get_available_auth_modules()
+    assert modules == {}, f"Expected no active module configs, got: {modules}"
