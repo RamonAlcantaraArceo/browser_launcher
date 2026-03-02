@@ -360,7 +360,11 @@ def test_persist_to_file_writes_config_data(tmp_path):
     config.persist_to_file(target_file)
 
     assert target_file.exists()
-    import tomllib
+
+    try:
+        import tomllib  # Python 3.11+
+    except ModuleNotFoundError:
+        import tomli as tomllib  # Python 3.10 and older
 
     with open(target_file, "rb") as f:
         written = tomllib.load(f)
