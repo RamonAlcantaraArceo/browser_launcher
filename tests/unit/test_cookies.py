@@ -1,5 +1,15 @@
 """Unit tests for CookieRule, CacheEntry, and CookieConfig (Google-style docstrings)."""
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import tomllib
+else:
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        import tomli as tomllib
+
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
@@ -360,11 +370,6 @@ def test_persist_to_file_writes_config_data(tmp_path):
     config.persist_to_file(target_file)
 
     assert target_file.exists()
-
-    try:
-        import tomllib  # Python 3.11+
-    except ModuleNotFoundError:
-        import tomli as tomllib  # Python 3.10 and older
 
     with open(target_file, "rb") as f:
         written = tomllib.load(f)
