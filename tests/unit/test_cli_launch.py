@@ -103,7 +103,9 @@ def test_launch_with_url_and_browser(monkeypatch, capsys):
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     with capsys.disabled():
-        result = runner.invoke(app, ["launch", "http://custom.com", "--browser", "firefox"])
+        result = runner.invoke(
+            app, ["launch", "http://custom.com", "--browser", "firefox"]
+        )
     assert result.exit_code == 0
     assert "Launching firefox at http://custom.com" in result.output
     mock_bl.launch.assert_called_once_with(url="http://custom.com")
@@ -401,10 +403,12 @@ def test_launch_session_gone_bad(monkeypatch, capsys):
         result = runner.invoke(app, ["launch"])
 
     assert result.exit_code == 0
-    
+
     # Verify the console.print was called with the session gone bad message
-    assert "session has gone bad, you need to relaunch to be able to " \
+    assert (
+        "session has gone bad, you need to relaunch to be able to "
         "capture screenshot" in result.output
+    )
     mock_bl.driver.close.assert_called()
 
 
@@ -1165,7 +1169,7 @@ class TestResolveCookieDomain:
     @pytest.mark.unit
     def test_falls_back_to_normalised_browser_domain(self):
         """When cookie is not in config, use normalised browser domain."""
-        config_data = {"users": {"alice": {"prod": {"cookies": {}}}}}
+        config_data: dict = {"users": {"alice": {"prod": {"cookies": {}}}}}
         result = _resolve_cookie_domain(
             cookie_name="unknown_cookie",
             browser_domain=".example.com",
@@ -1178,7 +1182,7 @@ class TestResolveCookieDomain:
     @pytest.mark.unit
     def test_normalises_config_domain_with_leading_dot(self):
         """Config domain with leading dot is also normalised."""
-        config_data = {
+        config_data: dict = {
             "users": {
                 "alice": {
                     "prod": {
@@ -1201,7 +1205,7 @@ class TestResolveCookieDomain:
     @pytest.mark.unit
     def test_returns_none_when_no_domain_available(self):
         """Returns None when neither config nor browser domain is available."""
-        config_data = {"users": {"alice": {"prod": {"cookies": {}}}}}
+        config_data: dict = {"users": {"alice": {"prod": {"cookies": {}}}}}
         result = _resolve_cookie_domain(
             cookie_name="missing",
             browser_domain=None,

@@ -22,7 +22,7 @@ class _StubAuthenticator(AuthenticatorBase):
     MODULE_NAME: ClassVar[str] = "stub"
     REQUIRED_CREDENTIALS: ClassVar[list[str]] = []
 
-    def authenticate(self, url: str) -> AuthResult:
+    def authenticate(self, url: str, **kwargs) -> AuthResult:
         return AuthResult(success=True, cookies=[])
 
     @classmethod
@@ -36,7 +36,7 @@ class _BadValidationAuth(AuthenticatorBase):
     MODULE_NAME: ClassVar[str] = "bad_val"
     REQUIRED_CREDENTIALS: ClassVar[list[str]] = []
 
-    def authenticate(self, url: str) -> AuthResult:
+    def authenticate(self, url: str, **kwargs) -> AuthResult:
         return AuthResult(success=True, cookies=[])
 
     @classmethod
@@ -53,7 +53,7 @@ class _ErrorOnInit(AuthenticatorBase):
     def __init__(self, config: AuthConfig) -> None:
         raise RuntimeError("boom")
 
-    def authenticate(self, url: str) -> AuthResult:
+    def authenticate(self, url: str, **kwargs) -> AuthResult:
         return AuthResult(success=True, cookies=[])
 
     @classmethod
@@ -266,7 +266,7 @@ class TestValidateModuleConfig:
             MODULE_NAME: ClassVar[str] = "boom"
             REQUIRED_CREDENTIALS: ClassVar[list[str]] = []
 
-            def authenticate(self, url: str) -> AuthResult:
+            def authenticate(self, url: str, **kwargs) -> AuthResult:
                 return AuthResult(success=True, cookies=[])
 
             @classmethod

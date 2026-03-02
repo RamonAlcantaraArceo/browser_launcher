@@ -1,8 +1,6 @@
 """Shared pytest fixtures for browser_launcher tests."""
 
-import logging
 from pathlib import Path
-from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,6 +11,7 @@ from browser_launcher.browsers.base import BrowserConfig
 # Try importing allure, but continue if not installed
 try:
     import allure
+
     HAS_ALLURE = True
 except ImportError:
     HAS_ALLURE = False
@@ -23,7 +22,7 @@ def allure_markers(request):
     """Automatically add test markers to Allure reports."""
     if not HAS_ALLURE:
         return
-    
+
     # Add test markers
     for marker in request.node.iter_markers():
         if marker.name in ("unit", "smoke"):
@@ -34,32 +33,33 @@ def allure_markers(request):
 def capture_selenium_logs_on_failure(request):
     """Capture and attach Selenium logs to Allure report on test failure."""
     yield
-    
+
     # Check if test failed
-    if hasattr(request.node, 'rep_call') and request.node.rep_call.failed:
+    if hasattr(request.node, "rep_call") and request.node.rep_call.failed:
         if not HAS_ALLURE:
             return
-        
+
         # Attach failure information
         allure.attach(
             "Test failed during call phase",
             name="Test Failure",
-            attachment_type=allure.attachment_type.TEXT
+            attachment_type=allure.attachment_type.TEXT,
         )
-        
+
         # Try to capture logs from the test
-        if hasattr(request, 'node') and hasattr(request.node, '_obj'):
+        if hasattr(request, "node") and hasattr(request.node, "_obj"):
             try:
                 test_instance = request.node._obj()
-                if hasattr(test_instance, 'driver') or hasattr(test_instance, 'browser_controller'):
+                if hasattr(test_instance, "driver") or hasattr(
+                    test_instance, "browser_controller"
+                ):
                     allure.attach(
                         "Selenium driver was active during test failure",
                         name="Driver Status",
-                        attachment_type=allure.attachment_type.TEXT
+                        attachment_type=allure.attachment_type.TEXT,
                     )
             except Exception:
                 pass
-
 
 
 @pytest.fixture
@@ -67,12 +67,16 @@ def allure_environment_properties():
     """Set up Allure environment properties."""
     if not HAS_ALLURE:
         return
-    
-    allure.environment(
-        Python="3.10+",
-        PyTest=pytest.__version__,
-        OS="macOS/Linux/Windows"
-    )
+
+    if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "environment"):
+        allure.dynamic.environment(
+            Python="3.10+", PyTest=pytest.__version__, OS="macOS/Linux/Windows"
+        )
+    elif hasattr(allure, "environment"):
+        allure.environment(
+            Python="3.10+", PyTest=pytest.__version__, OS="macOS/Linux/Windows"
+        )
+    # else: skip setting environment if not available
 
 
 @pytest.fixture

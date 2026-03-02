@@ -360,6 +360,7 @@ def _select_auth_module(
     logger.info("No authentication modules are configured in the config file.")
     return None
 
+
 def _cache_auth_result_cookies(
     auth_cookies: list[dict[str, Any]],
     browser_controller: Any,
@@ -467,7 +468,7 @@ def _run_authentication_attempt(
         raise
 
 
-def attempt_authentication(
+def attempt_authentication(  # noqa: C901
     browser_controller: Any,
     config_loader: BrowserLauncherConfig,
     cookie_config: CookieConfig,
@@ -907,10 +908,11 @@ def launch(  # noqa: C901
             tty.setcbreak(sys.stdin.fileno())
             logger.debug("Terminal mode set to unbuffered (cbreak)")
         else:
-            logger.debug("stdin is not a TTY or is closed; skipping terminal mode configuration")
+            logger.debug(
+                "stdin is not a TTY or is closed; skipping terminal mode configuration"
+            )
     except (AttributeError, termios.error, OSError, ValueError) as e:
         logger.debug(f"Could not configure terminal mode: {type(e).__name__}: {e}")
-
 
     try:
         console.print("Press Ctrl+D or q to exit.")
@@ -919,7 +921,6 @@ def launch(  # noqa: C901
         console.print("Press 'c' to dump all cookies from the browser.")
 
         # Skip interactive loop if stdin is not a usable TTY (e.g., during tests)
-        
 
         while True:
             if browser_controller.driver.session_id is None:
@@ -929,7 +930,9 @@ def launch(  # noqa: C901
                 )
                 break
             if sys.stdin.closed or not sys.stdin.isatty():
-                logger.debug("Non-interactive environment detected; breaking out of input loop.")
+                logger.debug(
+                    "Non-interactive environment detected; breaking out of input loop."
+                )
                 break
             try:
                 char = sys.stdin.read(1)
@@ -966,9 +969,7 @@ def launch(  # noqa: C901
                     console,
                 )
             elif char.lower() == "c":
-                _dump_cookies_from_browser(
-                    browser_controller.driver, logger, console
-                )
+                _dump_cookies_from_browser(browser_controller.driver, logger, console)
 
     except EOFError:
         console.print("\nExiting...")
@@ -980,7 +981,9 @@ def launch(  # noqa: C901
                     termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
                     logger.debug("Terminal mode restored")
             except (termios.error, OSError, ValueError) as e:
-                logger.debug(f"Could not restore terminal mode: {type(e).__name__}: {e}")
+                logger.debug(
+                    f"Could not restore terminal mode: {type(e).__name__}: {e}"
+                )
         try:
             browser_controller.driver.close()
         except Exception:

@@ -595,7 +595,7 @@ def get_applicable_rules(
     return cookie_config.get_rules(user, env, domain)
 
 
-def inject_and_verify_cookies(
+def inject_and_verify_cookies(  # noqa: C901
     launcher: Any, user: str, env: str, cookie_config: CookieConfig
 ) -> Optional[List[Dict[str, Any]]]:
     """Main integration hook to inject cached cookies and verify authenticity.
@@ -625,7 +625,11 @@ def inject_and_verify_cookies(
     try:
         # Defensive: check for users, user, env, cookies keys
         users_section = cookie_config.config_data.get("users")
-        if not users_section or user not in users_section or env not in users_section[user]:
+        if (
+            not users_section
+            or user not in users_section
+            or env not in users_section[user]
+        ):
             logger.warning(f"No cookie config found for user={user}, env={env}")
             return []
         cookies_section = users_section[user][env].get("cookies")
@@ -633,7 +637,9 @@ def inject_and_verify_cookies(
             logger.warning(f"No cookies found in config for user={user}, env={env}")
             return []
 
-        target_domains = [val["domain"] for val in cookies_section.values() if "domain" in val]
+        target_domains = [
+            val["domain"] for val in cookies_section.values() if "domain" in val
+        ]
 
         valid_cache = {}
         for target_domain in target_domains:

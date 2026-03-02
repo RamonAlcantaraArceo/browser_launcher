@@ -28,7 +28,7 @@ class _SuccessAuth(AuthenticatorBase):
     MODULE_NAME: ClassVar[str] = "success"
     REQUIRED_CREDENTIALS: ClassVar[list[str]] = []
 
-    def authenticate(self, url: str) -> AuthResult:
+    def authenticate(self, url: str, **kwargs) -> AuthResult:
         return AuthResult(
             success=True,
             cookies=[{"name": "session", "value": "abc123", "domain": "example.com"}],
@@ -45,7 +45,7 @@ class _FailAuth(AuthenticatorBase):
     MODULE_NAME: ClassVar[str] = "fail"
     REQUIRED_CREDENTIALS: ClassVar[list[str]] = []
 
-    def authenticate(self, url: str) -> AuthResult:
+    def authenticate(self, url: str, **kwargs) -> AuthResult:
         return AuthResult(
             success=False,
             cookies=[],
@@ -63,7 +63,7 @@ class _ErrorAuth(AuthenticatorBase):
     MODULE_NAME: ClassVar[str] = "error"
     REQUIRED_CREDENTIALS: ClassVar[list[str]] = []
 
-    def authenticate(self, url: str) -> AuthResult:
+    def authenticate(self, url: str, **kwargs) -> AuthResult:
         raise RuntimeError("selenium kaboom")
 
     @classmethod
@@ -77,7 +77,7 @@ class _NeedsCredsAuth(AuthenticatorBase):
     MODULE_NAME: ClassVar[str] = "needs_creds"
     REQUIRED_CREDENTIALS: ClassVar[list[str]] = ["username", "password"]
 
-    def authenticate(self, url: str) -> AuthResult:
+    def authenticate(self, url: str, **kwargs) -> AuthResult:
         u = self.config.get_credential("username")
         p = self.config.get_credential("password")
         if u == "admin" and p == "secret":
@@ -142,7 +142,9 @@ class TestFactoryAuthenticatorIntegration:
         result = auth.authenticate("https://example.com")
         assert result.success is True
         assert result.cookie_count == 1
-        assert result.get_cookie_by_name("session")["value"] == "abc123"
+        cookie = result.get_cookie_by_name("session")
+        assert cookie is not None
+        assert cookie["value"] == "abc123"
 
     @patch("browser_launcher.auth.factory.entry_points")
     def test_discover_create_authenticate_fail(self, mock_ep):
