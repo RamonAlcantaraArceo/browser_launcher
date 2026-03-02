@@ -347,7 +347,7 @@ def test_launch_browser_launch_failure(monkeypatch):
 
 
 @pytest.mark.unit
-def test_launch_session_gone_bad(monkeypatch):
+def test_launch_session_gone_bad(monkeypatch, capsys):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
