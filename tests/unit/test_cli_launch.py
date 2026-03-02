@@ -17,7 +17,7 @@ runner = CliRunner()
 
 
 @pytest.mark.unit
-def test_launch_success(monkeypatch):
+def test_launch_success(monkeypatch, capsys):
     # Mock config loader
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -57,7 +57,8 @@ def test_launch_success(monkeypatch):
     )
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
-    result = runner.invoke(app, ["launch"])
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"])
     assert result.exit_code == 0
     assert "Launching chrome at http://example.com" in result.output
     mock_bl.launch.assert_called_once_with(url="http://example.com")
@@ -65,7 +66,7 @@ def test_launch_success(monkeypatch):
 
 
 @pytest.mark.unit
-def test_launch_with_url_and_browser(monkeypatch):
+def test_launch_with_url_and_browser(monkeypatch, capsys):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -101,7 +102,8 @@ def test_launch_with_url_and_browser(monkeypatch):
     )
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
-    result = runner.invoke(app, ["launch", "http://custom.com", "--browser", "firefox"])
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch", "http://custom.com", "--browser", "firefox"])
     assert result.exit_code == 0
     assert "Launching firefox at http://custom.com" in result.output
     mock_bl.launch.assert_called_once_with(url="http://custom.com")
@@ -109,7 +111,7 @@ def test_launch_with_url_and_browser(monkeypatch):
 
 
 @pytest.mark.unit
-def test_launch_with_headless(monkeypatch):
+def test_launch_with_headless(monkeypatch, capsys):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -144,7 +146,8 @@ def test_launch_with_headless(monkeypatch):
     )
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
-    result = runner.invoke(app, ["launch", "--headless"])
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch", "--headless"])
     assert result.exit_code == 0
     mock_config.get_browser_config.assert_called_once_with("chrome", headless=True)
     mock_bl.launch.assert_called_once()
@@ -152,7 +155,7 @@ def test_launch_with_headless(monkeypatch):
 
 
 @pytest.mark.unit
-def test_launch_with_verbose_and_debug(monkeypatch):
+def test_launch_with_verbose_and_debug(monkeypatch, capsys):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -185,7 +188,8 @@ def test_launch_with_verbose_and_debug(monkeypatch):
     monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
-    result = runner.invoke(app, ["launch", "--verbose", "--debug"])
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch", "--verbose", "--debug"])
     assert result.exit_code == 0
     mock_bl.launch.assert_called_once()
     mock_bl.driver.close.assert_called()
@@ -353,7 +357,8 @@ def test_launch_browser_launch_failure(monkeypatch):
 
 
 @pytest.mark.unit
-def test_launch_session_gone_bad(monkeypatch):
+def test_launch_session_gone_bad(monkeypatch, capsys):
+    """Test that session termination is detected and handled gracefully."""
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -364,8 +369,9 @@ def test_launch_session_gone_bad(monkeypatch):
     )
     mock_config.get_default_url.return_value = "http://example.com"
     mock_bl = MagicMock()
-    # session_id is None on first read, then not None
-    type(mock_bl.driver).session_id = property(lambda self: None)
+    mock_bl.driver = MagicMock()
+    # Make session_id None to simulate session going bad
+    mock_bl.driver.session_id = None
     mock_bl.driver.close = MagicMock()
     mock_bl.launch = MagicMock()
     monkeypatch.setattr(
@@ -390,14 +396,20 @@ def test_launch_session_gone_bad(monkeypatch):
     # Simulate one loop with session_id None, then exit
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
-    result = runner.invoke(app, ["launch"])
+    # Disable capsys to prevent capture conflicts with CliRunner
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"])
+
     assert result.exit_code == 0
-    assert "session has gone bad" in result.output
+    
+    # Verify the console.print was called with the session gone bad message
+    assert "session has gone bad, you need to relaunch to be able to " \
+        "capture screenshot" in result.output
     mock_bl.driver.close.assert_called()
 
 
 @pytest.mark.unit
-def test_launch_eoferror(monkeypatch):
+def test_launch_eoferror(monkeypatch, capsys):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -432,14 +444,15 @@ def test_launch_eoferror(monkeypatch):
         lambda: MagicMock(info=MagicMock(), error=MagicMock()),
     )
 
-    result = runner.invoke(app, ["launch"], input=None)
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"], input=None)
     assert result.exit_code == 0
     assert "Exiting..." in result.output
     mock_bl.driver.close.assert_called()
 
 
 @pytest.mark.unit
-def test_launch_driver_close_exception(monkeypatch):
+def test_launch_driver_close_exception(monkeypatch, capsys):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -474,13 +487,14 @@ def test_launch_driver_close_exception(monkeypatch):
     )
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
-    result = runner.invoke(app, ["launch"])
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"])
     assert result.exit_code == 0
     mock_bl.driver.close.assert_called()
 
 
 @pytest.mark.unit
-def test_launch_console_logging_config(monkeypatch):
+def test_launch_console_logging_config(monkeypatch, capsys):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -518,14 +532,15 @@ def test_launch_console_logging_config(monkeypatch):
         monkeypatch.setattr(
             "sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""]))
         )
-        result = runner.invoke(app, ["launch"])
+        with capsys.disabled():
+            result = runner.invoke(app, ["launch"])
         assert result.exit_code == 0
         mock_bl.launch.assert_called()
         mock_bl.driver.close.assert_called()
 
 
 @pytest.mark.unit
-def test_launch_logger_not_initialized(monkeypatch):
+def test_launch_logger_not_initialized(monkeypatch, capsys):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -559,7 +574,7 @@ def test_launch_logger_not_initialized(monkeypatch):
 
 
 @pytest.mark.unit
-def test_launch_with_locale(monkeypatch):
+def test_launch_with_locale(monkeypatch, capsys):
     """Test that the locale parameter is correctly set on the browser config."""
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -599,7 +614,8 @@ def test_launch_with_locale(monkeypatch):
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     # Test with custom locale
-    result = runner.invoke(app, ["launch", "--locale", "fr-FR"])
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch", "--locale", "fr-FR"])
     assert result.exit_code == 0
 
     # Verify the locale was set on the browser config
@@ -612,7 +628,7 @@ def test_launch_with_locale(monkeypatch):
 
 
 @pytest.mark.unit
-def test_launch_with_default_locale(monkeypatch):
+def test_launch_with_default_locale(monkeypatch, capsys):
     """Test that the default locale is used when no locale parameter is provided."""
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -652,7 +668,8 @@ def test_launch_with_default_locale(monkeypatch):
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     # Test without locale parameter (should use default "en-US")
-    result = runner.invoke(app, ["launch"])
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"])
     assert result.exit_code == 0
 
     # Verify the default locale is used

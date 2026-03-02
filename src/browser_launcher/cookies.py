@@ -623,10 +623,17 @@ def inject_and_verify_cookies(
     """
     cookies_to_inject: Optional[List[Dict[str, Any]]] = None
     try:
-        target_domains = [
-            val["domain"]
-            for val in cookie_config.config_data["users"][user][env]["cookies"].values()
-        ]
+        # Defensive: check for users, user, env, cookies keys
+        users_section = cookie_config.config_data.get("users")
+        if not users_section or user not in users_section or env not in users_section[user]:
+            logger.warning(f"No cookie config found for user={user}, env={env}")
+            return []
+        cookies_section = users_section[user][env].get("cookies")
+        if not cookies_section:
+            logger.warning(f"No cookies found in config for user={user}, env={env}")
+            return []
+
+        target_domains = [val["domain"] for val in cookies_section.values() if "domain" in val]
 
         valid_cache = {}
         for target_domain in target_domains:

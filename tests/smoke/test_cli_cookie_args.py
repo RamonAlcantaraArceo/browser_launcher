@@ -12,33 +12,35 @@ runner = CliRunner()
 
 
 @pytest.mark.smoke
-@pytest.mark.usefixtures("caplog")
-def test_launch_command_with_user_env_args(caplog, mock_browser_config):
+# @pytest.mark.usefixtures("caplog")
+def test_launch_command_with_user_env_args(caplog, mock_browser_config, capsys):
     """Verify CLI accepts and passes user/env arguments."""
-    runner.invoke(
-        app,
-        [
-            "launch",
-            "https://example.com",
-            "--browser",
-            "chrome",
-            "--user",
-            "alice",
-            "--env",
-            "staging",
-        ],
-    )
+    with capsys.disabled():
+        runner.invoke(
+            app,
+            [
+                "launch",
+                "https://example.com",
+                "--browser",
+                "chrome",
+                "--user",
+                "alice",
+                "--env",
+                "staging",
+            ],
+        )
     # Check captured logs for user/env
     log_output = caplog.text
     assert "user=alice" in log_output or "env=staging" in log_output
 
 
 @pytest.mark.smoke
-def test_launch_command_default_user_env(mock_browser_config):
+def test_launch_command_default_user_env(mock_browser_config, capsys):
     """Verify CLI defaults for user/env are 'default' and 'prod'."""
-    result = runner.invoke(
-        app, ["launch", "https://example.com", "--browser", "chrome"]
-    )
+    with capsys.disabled():
+        result = runner.invoke(
+            app, ["launch", "https://example.com", "--browser", "chrome"]
+        )
     # Should use default user/env if not specified
     assert result.exit_code == 0 or result.exit_code != 0  # Accept any exit for now
 

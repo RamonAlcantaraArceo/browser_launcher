@@ -352,14 +352,13 @@ def _select_auth_module(
         return selected
 
     configured_modules = config_loader.get_available_auth_modules()
-    if configured_modules:
+    if configured_modules and len(configured_modules) > 0:
         selected = next(iter(configured_modules.keys()))
         logger.info(f"Selected auth module '{selected}' from global configuration")
         return selected
 
-    logger.debug("No authentication modules configured")
+    logger.info("No authentication modules are configured in the config file.")
     return None
-
 
 def _cache_auth_result_cookies(
     auth_cookies: list[dict[str, Any]],
@@ -757,6 +756,7 @@ def launch(  # noqa: C901
     # Always read console_logging from config file
     console_logging = get_console_logging_setting()
     logging_level = get_logging_level_setting()
+    # print("we made it here")
     # Initialize logging first
     _setup_logging(
         verbose=verbose,
@@ -901,11 +901,16 @@ def launch(  # noqa: C901
     # Try to set terminal to unbuffered mode for immediate character reading
     old_settings = None
     try:
-        old_settings = termios.tcgetattr(sys.stdin)
-        tty.setcbreak(sys.stdin.fileno())
-    except (AttributeError, termios.error, OSError):
-        # If we can't set terminal mode (e.g., in tests or non-TTY), continue anyway
-        pass
+        # Guard against non-TTY or closed stdin (e.g., during tests)
+        if not sys.stdin.closed and sys.stdin.isatty():
+            old_settings = termios.tcgetattr(sys.stdin)
+            tty.setcbreak(sys.stdin.fileno())
+            logger.debug("Terminal mode set to unbuffered (cbreak)")
+        else:
+            logger.debug("stdin is not a TTY or is closed; skipping terminal mode configuration")
+    except (AttributeError, termios.error, OSError, ValueError) as e:
+        logger.debug(f"Could not configure terminal mode: {type(e).__name__}: {e}")
+
 
     try:
         console.print("Press Ctrl+D or q to exit.")
@@ -913,18 +918,28 @@ def launch(  # noqa: C901
         console.print("Press 's' to save/cache cookies for this session.")
         console.print("Press 'c' to dump all cookies from the browser.")
 
+        # Skip interactive loop if stdin is not a usable TTY (e.g., during tests)
+        
+
         while True:
             if browser_controller.driver.session_id is None:
                 console.print(
                     "session has gone bad, you need to relaunch to be able to "
                     "capture screenshot"
                 )
-            char = sys.stdin.read(1)
-            if not char or char == "\x04" or char.lower() == "q":  # EOF or Ctrl+D
-                # Exit the loop
+                break
+            if sys.stdin.closed or not sys.stdin.isatty():
+                logger.debug("Non-interactive environment detected; breaking out of input loop.")
+                break
+            try:
+                char = sys.stdin.read(1)
+            except ValueError as e:
+                logger.debug(f"stdin closed or unavailable: {e}")
+                break
+
+            if not char or char == "\x04" or char.lower() == "q":
                 break
             elif char.lower() == "\n" or char.lower() == "\r":
-                # Capture screenshot
                 try:
                     screenshot_name = gen.generate()
                     _capture_screenshot(
@@ -940,7 +955,6 @@ def launch(  # noqa: C901
                     )
                     raise e
             elif char.lower() == "s":
-                # Save/cache cookies for this session
                 cache_cookies_for_session(
                     browser_controller,
                     user,
@@ -951,10 +965,10 @@ def launch(  # noqa: C901
                     logger,
                     console,
                 )
-
             elif char.lower() == "c":
-                # Dump all cookies from the browser
-                _dump_cookies_from_browser(browser_controller.driver, logger, console)
+                _dump_cookies_from_browser(
+                    browser_controller.driver, logger, console
+                )
 
     except EOFError:
         console.print("\nExiting...")
@@ -962,9 +976,11 @@ def launch(  # noqa: C901
         # Restore original terminal settings if they were saved
         if old_settings is not None:
             try:
-                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
-            except (termios.error, OSError):
-                pass
+                if not sys.stdin.closed and sys.stdin.isatty():
+                    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+                    logger.debug("Terminal mode restored")
+            except (termios.error, OSError, ValueError) as e:
+                logger.debug(f"Could not restore terminal mode: {type(e).__name__}: {e}")
         try:
             browser_controller.driver.close()
         except Exception:

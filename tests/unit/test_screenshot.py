@@ -24,7 +24,7 @@ class TestIDGenerator:
     def test_init_default_values(self) -> None:
         """Test IDGenerator initialization with default values."""
         generator = IDGenerator()
-        assert generator.prefix == "foo"
+        assert generator.prefix == "bl_screenshot"
         assert generator.counter == 0
         assert generator.directory == Path.home() / "Downloads"
         assert len(generator.session_uuid) == 5

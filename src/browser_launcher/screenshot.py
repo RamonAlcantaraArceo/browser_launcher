@@ -29,7 +29,7 @@ class IDGenerator:
         directory (Path): Directory path prepended to the generated identifier.
     """
 
-    def __init__(self, prefix: str = "foo", directory: str = "~/Downloads"):
+    def __init__(self, prefix: str = "bl_screenshot", directory: str = "~/Downloads"):
         """
         Initialize the IDGenerator.
 
