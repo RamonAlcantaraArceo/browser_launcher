@@ -109,10 +109,7 @@ jobs:
           path: allure-reports
 
       - name: Setup Allure
-        run: |
-          sudo apt-add-repository ppa:qameta/allure
-          sudo apt-get update
-          sudo apt-get install -y allure
+        run: npm install -g allure-commandline
 
       - name: Generate Allure Report
         run: |
