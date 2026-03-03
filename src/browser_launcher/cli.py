@@ -757,7 +757,7 @@ def launch(  # noqa: C901
     # Always read console_logging from config file
     console_logging = get_console_logging_setting()
     logging_level = get_logging_level_setting()
-    # print("we made it here")
+
     # Initialize logging first
     _setup_logging(
         verbose=verbose,

@@ -209,8 +209,8 @@ class AuthFactory:
     ) -> bool:
         """Validate configuration for a specific authentication module.
 
-        Checks if the authenticator class has a custom validate_config class method,
-        and falls back to basic validation if not.
+        Calls the authenticator class's validate_config method, which is defined
+        in AuthenticatorBase and can be overridden by subclasses for custom validation.
 
         Args:
             authenticator_class: The authenticator class to validate config for
@@ -225,43 +225,26 @@ class AuthFactory:
         )
 
         try:
-            # Check if the authenticator class has custom validation
-            if hasattr(authenticator_class, "validate_config"):
+            # Call validate_config, which may be overridden by subclasses
+            if "validate_config" in authenticator_class.__dict__:
                 logger.debug(
                     f"{authenticator_class.__name__} has custom validate_config method"
                 )
-                result = authenticator_class.validate_config(config)
-                if result:
-                    logger.debug(
-                        f"Config validation passed for {authenticator_class.__name__}"
-                    )
-                else:
-                    logger.warning(
-                        f"Config validation failed for {authenticator_class.__name__}"
-                    )
-                return result
-
-            # Fall back to basic AuthConfig validation
-            logger.debug(
-                f"Using basic config validation for {authenticator_class.__name__}"
-            )
-
-            if config.timeout_seconds <= 0:
-                logger.warning(
-                    f"Invalid timeout_seconds in auth config: {config.timeout_seconds}"
+            else:
+                logger.debug(
+                    f"Using base validate_config method for {authenticator_class.__name__}"
                 )
-                return False
 
-            if config.retry_attempts < 0:
-                logger.warning(
-                    f"Invalid retry_attempts in auth config: {config.retry_attempts}"
+            result = authenticator_class.validate_config(config)
+            if result:
+                logger.debug(
+                    f"Config validation passed for {authenticator_class.__name__}"
                 )
-                return False
-
-            logger.debug(
-                f"Basic config validation passed for {authenticator_class.__name__}"
-            )
-            return True
+            else:
+                logger.warning(
+                    f"Config validation failed for {authenticator_class.__name__}"
+                )
+            return result
 
         except Exception as e:
             logger.error(
