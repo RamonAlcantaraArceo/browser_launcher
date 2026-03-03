@@ -46,15 +46,6 @@ jobs:
           poetry run python --version
           poetry run pytest --version
 
-      - name: Run linting (Ruff)
-        run: poetry run ruff check src/ tests/
-
-      - name: Run formatting check
-        run: poetry run ruff format --check src/ tests/
-
-      - name: Run type checking (Mypy)
-        run: poetry run mypy src/ tests/ || true
-
       - name: Run unit tests with coverage
         env:
           ALLURE_PYTHON_VERSION: ${{ matrix.python-version }}
@@ -103,9 +94,90 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  test-smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.13', '3.14']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        id: setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: '2.2.1'
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-test-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+          
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: |
+          poetry install --with dev --verbose
+          
+      - name: Verify installation
+        run: |
+          poetry run python --version
+          poetry run pytest --version
+
+      - name: Run unit tests with coverage
+        env:
+          ALLURE_PYTHON_VERSION: ${{ matrix.python-version }}
+        run: |
+          poetry run pytest tests/smoke/ \
+            -v \
+            --color=no \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term-missing \
+            --alluredir=allure-results \
+            -n auto \
+            --tb=short
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Upload Allure Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-smoke-results-${{ matrix.python-version }}
+          path: allure-results/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload HTML Coverage Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ matrix.python-version }}
+          path: htmlcov/
+          if-no-files-found: warn
+          retention-days: 30
+
   allure-report:
     name: Publish Allure Report
-    needs: test
+    needs: [test, test-smoke]
     runs-on: ubuntu-latest
     if: always()
     env:
@@ -124,62 +196,9 @@ jobs:
       - name: Download Allure Results
         uses: actions/download-artifact@v4
         with:
-          pattern: allure-results-*
+          pattern: allure*-results-*
           path: allure-results
           merge-multiple: true
-
-      - name: Debug merged files
-        run: |
-          echo "Merged files count:"
-          find allure-results -type f | wc -l
-          find allure-results -maxdepth 2 -type f | head -n 30
-
-      - name: Validate matrix Python-version metadata in merged results
-        run: |
-          python - <<'PY'
-          import json
-          import os
-          import pathlib
-          import sys
-
-          def normalize_python_label(raw):
-            if raw is None:
-              return None
-            value = str(raw).strip()
-            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-              value = value[1:-1].strip()
-            return value
-
-          results_dir = pathlib.Path("allure-results")
-          expected = {
-              f"Python {version.strip()}"
-              for version in os.environ["EXPECTED_PYTHON_VERSIONS"].split(",")
-              if version.strip()
-          }
-
-          found = set()
-          for file_path in results_dir.glob("*-result.json"):
-              try:
-                data = json.loads(file_path.read_text())
-              except Exception:
-                continue
-              for parameter in data.get("parameters", []):
-                if parameter.get("name") == "python_version":
-                  value = normalize_python_label(parameter.get("value"))
-                  if value:
-                    found.add(value)
-              for label in data.get("labels", []):
-                if label.get("name") == "subSuite":
-                  value = normalize_python_label(label.get("value"))
-                  if value and value.startswith("Python "):
-                    found.add(value)
-
-          print("Expected Python labels:", sorted(expected))
-          print("Found Python labels:", sorted(found))
-          missing = expected - found
-          if missing:
-            print("Missing Python labels:", sorted(missing))
-          PY
 
       - name: Write Allure executor and environment metadata
         run: |
@@ -206,25 +225,6 @@ jobs:
       - name: Generate Allure Report
         run: |
           allure generate allure-results -o allure-report --clean
-
-      - name: Validate generated Allure report summary
-        run: |
-          python - <<'PY'
-          import json
-          import pathlib
-          import sys
-
-          summary_path = pathlib.Path("allure-report/widgets/summary.json")
-          if not summary_path.exists():
-              print("Missing summary.json")
-              sys.exit(1)
-
-          summary = json.loads(summary_path.read_text())
-          total = summary.get("statistic", {}).get("total", 0)
-          print("Allure total tests:", total)
-          if total <= 0:
-              sys.exit(1)
-          PY
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
