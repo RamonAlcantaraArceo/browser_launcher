@@ -287,12 +287,16 @@ class AuthFactory:
 
         authenticator_class = available_modules[module_name]
 
+        base_validate = AuthenticatorBase.validate_config
+        auth_validate = getattr(authenticator_class, "validate_config", None)
+        has_custom_validation = auth_validate is not None and auth_validate is not base_validate
+
         info = {
             "name": module_name,
             "class": authenticator_class.__name__,
             "module": authenticator_class.__module__,
             "docstring": authenticator_class.__doc__,
-            "has_custom_validation": hasattr(authenticator_class, "validate_config"),
+            "has_custom_validation": has_custom_validation,
         }
 
         return info
