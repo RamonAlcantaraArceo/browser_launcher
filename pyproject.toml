@@ -5,7 +5,10 @@ description = "A small Python project to launch browsers (placeholder)."
 authors = ["Ramon Alcantara Arceo <you@example.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{ include = "browser_launcher", from = "src" }]
+packages = [
+	{ include = "browser_launcher", from = "src" },
+	{ include = "examples" },
+]
 
 # Include asset files
 include = [
@@ -23,16 +26,25 @@ tomli-w = "^1.2.0"
 r3a-minikit = {url = "https://github.com/RamonAlcantaraArceo/r3a-minikit/releases/download/v0.0.1/r3a_minikit-0.0.1-py3-none-any.whl"}
 pyyaml = "^6.0.3"
 types-pyyaml = "^6.0.12.20250915"
+tomli = { version = "^2.0.1", python = "<3.11" }
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0"
 pytest-cov = "^7.0.0"
+pytest-xdist = "^3.5.0"
+pytest-randomly = "^3.13.0"
+pytest-timeout = "^2.1.0"
+allure-pytest = "^2.13.0"
 ruff = "^0.15.0"
 mypy = "^1.19.1"
 tox = "^4.46.3"
 
 [tool.poetry.scripts]
 browser-launcher = "browser_launcher.__main__:main"
+
+[tool.poetry.plugins."browser_launcher.authenticators"]
+dummy = "browser_launcher.auth.dummy:DummyAuthenticator"
+form_auth = "examples.auth_modules.form_auth:FormAuthenticator"
 
 [build-system]
 requires = ["poetry-core>=1.8"]
@@ -87,9 +99,3 @@ warn_return_any = false
 # This one is a catch-all flag for the rest of strict checks that are technically
 # correct but may not be practical
 extra_checks = false
-
-[tool.pytest.ini_options]
-markers = [
-  "unit: fast tests that do not launch a browser",
-  "smoke: launches a browser and performs minimal checks",
-]

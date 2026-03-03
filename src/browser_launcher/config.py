@@ -1,10 +1,11 @@
 """Configuration management for browser launcher."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import toml
 
+from browser_launcher.auth.config import AuthConfig
 from browser_launcher.browsers.base import BrowserConfig
 
 
@@ -80,3 +81,139 @@ class BrowserLauncherConfig:
         return self.config_data.get("urls", {}).get(
             "homepage", "https://www.microsoft.com"
         )
+
+    def get_auth_config(
+        self,
+        module_name: Optional[str] = None,
+        user: Optional[str] = None,
+        env: Optional[str] = None,
+    ) -> AuthConfig:
+        """Get authentication configuration with hierarchical resolution.
+
+        Resolution order (later values override earlier ones):
+        1. Global auth defaults: [auth]
+        2. Module-specific config: [auth.{module_name}]
+        3. User/env auth config: [users.{user}.{env}.auth]
+        4. Module config within user/env: [users.{user}.{env}.auth.{module_name}]
+
+        Args:
+            module_name: Name of the authentication module
+            user: User identifier for hierarchical config
+            env: Environment identifier for hierarchical config
+
+        Returns:
+            AuthConfig instance with merged configuration
+        """
+        # Start with empty config dict
+        config_dict: Dict[str, Any] = {}
+
+        # 1. Global auth defaults
+        global_auth = self.config_data.get("auth", {})
+        if isinstance(global_auth, dict):
+            config_dict.update(global_auth)
+
+        # 2. Module-specific global config
+        if module_name and f"{module_name}" in global_auth:
+            module_config = global_auth[module_name]
+            if isinstance(module_config, dict):
+                config_dict.update(module_config)
+
+        # 3. User/env auth config
+        if user and env:
+            user_env_auth = self._get_nested_config(["users", user, env, "auth"])
+            if user_env_auth:
+                config_dict.update(user_env_auth)
+
+                # 4. Module config within user/env
+                if module_name and module_name in user_env_auth:
+                    module_user_config = user_env_auth[module_name]
+                    if isinstance(module_user_config, dict):
+                        config_dict.update(module_user_config)
+
+        # Convert nested dicts and filter valid AuthConfig fields
+        return self._create_auth_config(config_dict)
+
+    def get_auth_module_config(self, module_name: str) -> Dict[str, Any]:
+        """Get module-specific authentication configuration.
+
+        Args:
+            module_name: Name of the authentication module
+
+        Returns:
+            Dictionary of module-specific configuration
+        """
+        auth_config = self.config_data.get("auth", {})
+        return auth_config.get(module_name, {})
+
+    def get_available_auth_modules(self) -> Dict[str, Dict[str, Any]]:
+        """Get all configured authentication modules.
+
+        Returns:
+            Dictionary mapping module names to their configurations
+        """
+        auth_config = self.config_data.get("auth", {})
+        modules = {}
+
+        for key, value in auth_config.items():
+            # Skip top-level auth settings, only return module configs
+            if isinstance(value, dict) and key not in [
+                "timeout_seconds",
+                "retry_attempts",
+                "retry_delay_seconds",
+                "headless",
+                "credentials",
+                "custom_options",
+                "user_agent",
+                "window_size",
+                "page_load_timeout",
+                "element_wait_timeout",
+                "screenshot_on_failure",
+                "screenshot_directory",
+                "allowed_domains",
+                "required_cookies",
+            ]:
+                modules[key] = value
+
+        return modules
+
+    def _get_nested_config(self, keys: list[str]) -> Optional[Dict[str, Any]]:
+        """Get nested configuration value by traversing key path.
+
+        Args:
+            keys: List of keys to traverse (e.g., ["users", "alice", "prod", "auth"])
+
+        Returns:
+            Dictionary if found, None otherwise
+        """
+        data = self.config_data
+        for key in keys:
+            if isinstance(data, dict) and key in data:
+                data = data[key]
+            else:
+                return None
+        return data if isinstance(data, dict) else None
+
+    def _create_auth_config(self, config_dict: Dict[str, Any]) -> AuthConfig:
+        """Create AuthConfig from dictionary, filtering invalid keys.
+
+        Args:
+            config_dict: Raw configuration dictionary
+
+        Returns:
+            AuthConfig instance
+        """
+        # Get valid AuthConfig field names
+        from dataclasses import fields
+
+        valid_fields = {f.name for f in fields(AuthConfig)}
+
+        # Filter config dict to only include valid AuthConfig fields
+        filtered_config = {k: v for k, v in config_dict.items() if k in valid_fields}
+
+        # Handle special field conversions
+        if "screenshot_directory" in filtered_config:
+            screenshot_dir = filtered_config["screenshot_directory"]
+            if isinstance(screenshot_dir, str):
+                filtered_config["screenshot_directory"] = Path(screenshot_dir)
+
+        return AuthConfig(**filtered_config)

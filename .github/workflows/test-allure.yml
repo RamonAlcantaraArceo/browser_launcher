@@ -1,0 +1,120 @@
+name: Tests with Allure Reporting
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: '2.2.1'
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-test-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+          
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: |
+          poetry install --with dev --verbose
+          
+      - name: Run linting (Ruff)
+        run: poetry run ruff check src/ tests/
+
+      - name: Run formatting check
+        run: poetry run ruff format --check src/ tests/
+
+      - name: Run type checking (Mypy)
+        run: poetry run mypy src/ tests/ || true
+
+      - name: Run unit tests with coverage
+        run: |
+          poetry run pytest tests/unit/ \
+            -v \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term-missing \
+            --alluredir=allure-results \
+            -n auto \
+            --tb=short
+
+      - name: Run smoke tests sequentially
+        run: |
+          poetry run pytest tests/smoke/ \
+            -v \
+            --alluredir=allure-results \
+            --tb=short \
+            || true
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Upload Allure Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-${{ matrix.python-version }}
+          path: allure-results/
+          retention-days: 30
+
+      - name: Upload HTML Coverage Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ matrix.python-version }}
+          path: htmlcov/
+          retention-days: 30
+
+  allure-report:
+    name: Publish Allure Report
+    needs: test
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Download Allure Results
+        uses: actions/download-artifact@v4
+        with:
+          path: allure-reports
+
+      - name: Setup Allure
+        run: |
+          sudo apt-add-repository ppa:qameta/allure
+          sudo apt-get update
+          sudo apt-get install -y allure
+
+      - name: Generate Allure Report
+        run: |
+          allure generate allure-reports/ -o allure-report/ --clean
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        if: success()
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./allure-report

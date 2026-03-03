@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
+import tomli_w
 import yaml
 from rich.table import Table
 from selenium import webdriver
@@ -347,6 +348,7 @@ class CookieConfig:
                     value=cookie["value"],
                     timestamp=ts,
                     ttl_seconds=cookie.get("ttl_seconds", 28800),
+                    domain=domain,
                 )
         return cache
 
@@ -434,6 +436,29 @@ class CookieConfig:
             f"Remaining: "
             f"{len([c for c in valid_cookies.values() if c.get('domain') == domain])}."
         )
+
+    def persist_to_file(self, config_file: Any) -> None:
+        """Write the current configuration data to a TOML file on disk.
+
+        Serialises ``self.config_data`` using ``tomli_w`` and writes it to
+        *config_file*.  This is the single, authoritative place for
+        persisting cookie configuration so that callers do not need to
+        handle low-level file I/O or serialisation directly.
+
+        Args:
+            config_file: A :class:`~pathlib.Path` (or *str*) pointing to the
+                target TOML file.  The file is opened in binary-write mode
+                (``"wb"``) and its previous contents are replaced entirely.
+
+        Returns:
+            None
+
+        Raises:
+            OSError: If the file cannot be opened or written.
+        """
+        with open(config_file, "wb") as f:
+            tomli_w.dump(self.config_data, f)
+        logger.debug(f"Persisted cookie config to {config_file}")
 
 
 def read_cookies_from_browser(driver: Any, domain: str) -> List[Dict[str, Any]]:
@@ -570,7 +595,7 @@ def get_applicable_rules(
     return cookie_config.get_rules(user, env, domain)
 
 
-def inject_and_verify_cookies(
+def inject_and_verify_cookies(  # noqa: C901
     launcher: Any, user: str, env: str, cookie_config: CookieConfig
 ) -> Optional[List[Dict[str, Any]]]:
     """Main integration hook to inject cached cookies and verify authenticity.
@@ -598,9 +623,22 @@ def inject_and_verify_cookies(
     """
     cookies_to_inject: Optional[List[Dict[str, Any]]] = None
     try:
+        # Defensive: check for users, user, env, cookies keys
+        users_section = cookie_config.config_data.get("users")
+        if (
+            not users_section
+            or user not in users_section
+            or env not in users_section[user]
+        ):
+            logger.warning(f"No cookie config found for user={user}, env={env}")
+            return []
+        cookies_section = users_section[user][env].get("cookies")
+        if not cookies_section:
+            logger.warning(f"No cookies found in config for user={user}, env={env}")
+            return []
+
         target_domains = [
-            val["domain"]
-            for val in cookie_config.config_data["users"][user][env]["cookies"].values()
+            val["domain"] for val in cookies_section.values() if "domain" in val
         ]
 
         valid_cache = {}
@@ -643,13 +681,23 @@ def inject_and_verify_cookies(
                 f"Read {len(browser_cookies)} cookies from browser for"
                 f" domain {target_domains}"
             )
-            # Update cache with cookies from browser
+            # Update cache with cookies from browser, using the config-defined
+            # domain rather than the browser-reported domain.  The browser may
+            # assign a subdomain (e.g. ``artists.apple.com``) or a dot-prefixed
+            # parent domain (e.g. ``.apple.com``), neither of which matches the
+            # canonical domain stored in the config (e.g. ``apple.com``).
             for cookie in browser_cookies:
+                cookie_name = cookie["name"]
+                config_domain = (
+                    valid_cache[cookie_name].domain
+                    if cookie_name in valid_cache and valid_cache[cookie_name].domain
+                    else cookie.get("domain", "")
+                )
                 cookie_config.update_cookie_cache(
                     user,
                     env,
-                    cookie.get("domain", ""),
-                    cookie["name"],
+                    config_domain,
+                    cookie_name,
                     cookie.get("value", ""),
                 )
 

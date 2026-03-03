@@ -1,17 +1,23 @@
-from unittest.mock import MagicMock, PropertyMock, call, mock_open, patch
+from unittest.mock import MagicMock, PropertyMock, call, patch
 
 import pytest
 from typer.testing import CliRunner
 
 from browser_launcher.browsers.base import BrowserConfig
-from browser_launcher.cli import app, cache_cookies_for_session
+from browser_launcher.cli import (
+    _cache_auth_result_cookies,
+    _normalize_cookie_domain,
+    _resolve_cookie_domain,
+    app,
+    cache_cookies_for_session,
+)
 from browser_launcher.cookies import CookieConfig
 
 runner = CliRunner()
 
 
 @pytest.mark.unit
-def test_launch_success(monkeypatch):
+def test_launch_success(monkeypatch, capsys):
     # Mock config loader
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -51,7 +57,8 @@ def test_launch_success(monkeypatch):
     )
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
-    result = runner.invoke(app, ["launch"])
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"])
     assert result.exit_code == 0
     assert "Launching chrome at http://example.com" in result.output
     mock_bl.launch.assert_called_once_with(url="http://example.com")
@@ -59,7 +66,7 @@ def test_launch_success(monkeypatch):
 
 
 @pytest.mark.unit
-def test_launch_with_url_and_browser(monkeypatch):
+def test_launch_with_url_and_browser(monkeypatch, capsys):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -95,7 +102,10 @@ def test_launch_with_url_and_browser(monkeypatch):
     )
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
-    result = runner.invoke(app, ["launch", "http://custom.com", "--browser", "firefox"])
+    with capsys.disabled():
+        result = runner.invoke(
+            app, ["launch", "http://custom.com", "--browser", "firefox"]
+        )
     assert result.exit_code == 0
     assert "Launching firefox at http://custom.com" in result.output
     mock_bl.launch.assert_called_once_with(url="http://custom.com")
@@ -103,7 +113,7 @@ def test_launch_with_url_and_browser(monkeypatch):
 
 
 @pytest.mark.unit
-def test_launch_with_headless(monkeypatch):
+def test_launch_with_headless(monkeypatch, capsys):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -138,7 +148,8 @@ def test_launch_with_headless(monkeypatch):
     )
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
-    result = runner.invoke(app, ["launch", "--headless"])
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch", "--headless"])
     assert result.exit_code == 0
     mock_config.get_browser_config.assert_called_once_with("chrome", headless=True)
     mock_bl.launch.assert_called_once()
@@ -146,7 +157,7 @@ def test_launch_with_headless(monkeypatch):
 
 
 @pytest.mark.unit
-def test_launch_with_verbose_and_debug(monkeypatch):
+def test_launch_with_verbose_and_debug(monkeypatch, capsys):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -179,7 +190,8 @@ def test_launch_with_verbose_and_debug(monkeypatch):
     monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
-    result = runner.invoke(app, ["launch", "--verbose", "--debug"])
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch", "--verbose", "--debug"])
     assert result.exit_code == 0
     mock_bl.launch.assert_called_once()
     mock_bl.driver.close.assert_called()
@@ -347,7 +359,8 @@ def test_launch_browser_launch_failure(monkeypatch):
 
 
 @pytest.mark.unit
-def test_launch_session_gone_bad(monkeypatch):
+def test_launch_session_gone_bad(monkeypatch, capsys):
+    """Test that session termination is detected and handled gracefully."""
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -358,8 +371,9 @@ def test_launch_session_gone_bad(monkeypatch):
     )
     mock_config.get_default_url.return_value = "http://example.com"
     mock_bl = MagicMock()
-    # session_id is None on first read, then not None
-    type(mock_bl.driver).session_id = property(lambda self: None)
+    mock_bl.driver = MagicMock()
+    # Make session_id None to simulate session going bad
+    mock_bl.driver.session_id = None
     mock_bl.driver.close = MagicMock()
     mock_bl.launch = MagicMock()
     monkeypatch.setattr(
@@ -384,14 +398,22 @@ def test_launch_session_gone_bad(monkeypatch):
     # Simulate one loop with session_id None, then exit
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
-    result = runner.invoke(app, ["launch"])
+    # Disable capsys to prevent capture conflicts with CliRunner
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"])
+
     assert result.exit_code == 0
-    assert "session has gone bad" in result.output
+
+    # Verify the console.print was called with the session gone bad message
+    assert (
+        "session has gone bad, you need to relaunch to be able to "
+        "capture screenshot" in result.output
+    )
     mock_bl.driver.close.assert_called()
 
 
 @pytest.mark.unit
-def test_launch_eoferror(monkeypatch):
+def test_launch_eoferror(monkeypatch, capsys):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -426,14 +448,15 @@ def test_launch_eoferror(monkeypatch):
         lambda: MagicMock(info=MagicMock(), error=MagicMock()),
     )
 
-    result = runner.invoke(app, ["launch"], input=None)
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"], input=None)
     assert result.exit_code == 0
     assert "Exiting..." in result.output
     mock_bl.driver.close.assert_called()
 
 
 @pytest.mark.unit
-def test_launch_driver_close_exception(monkeypatch):
+def test_launch_driver_close_exception(monkeypatch, capsys):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -468,13 +491,14 @@ def test_launch_driver_close_exception(monkeypatch):
     )
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
-    result = runner.invoke(app, ["launch"])
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"])
     assert result.exit_code == 0
     mock_bl.driver.close.assert_called()
 
 
 @pytest.mark.unit
-def test_launch_console_logging_config(monkeypatch):
+def test_launch_console_logging_config(monkeypatch, capsys):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -512,14 +536,15 @@ def test_launch_console_logging_config(monkeypatch):
         monkeypatch.setattr(
             "sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""]))
         )
-        result = runner.invoke(app, ["launch"])
+        with capsys.disabled():
+            result = runner.invoke(app, ["launch"])
         assert result.exit_code == 0
         mock_bl.launch.assert_called()
         mock_bl.driver.close.assert_called()
 
 
 @pytest.mark.unit
-def test_launch_logger_not_initialized(monkeypatch):
+def test_launch_logger_not_initialized(monkeypatch, capsys):
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
     mock_config.get_browser_config.return_value = BrowserConfig(
@@ -553,7 +578,7 @@ def test_launch_logger_not_initialized(monkeypatch):
 
 
 @pytest.mark.unit
-def test_launch_with_locale(monkeypatch):
+def test_launch_with_locale(monkeypatch, capsys):
     """Test that the locale parameter is correctly set on the browser config."""
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -593,7 +618,8 @@ def test_launch_with_locale(monkeypatch):
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     # Test with custom locale
-    result = runner.invoke(app, ["launch", "--locale", "fr-FR"])
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch", "--locale", "fr-FR"])
     assert result.exit_code == 0
 
     # Verify the locale was set on the browser config
@@ -606,7 +632,7 @@ def test_launch_with_locale(monkeypatch):
 
 
 @pytest.mark.unit
-def test_launch_with_default_locale(monkeypatch):
+def test_launch_with_default_locale(monkeypatch, capsys):
     """Test that the default locale is used when no locale parameter is provided."""
     mock_config = MagicMock()
     mock_config.get_default_browser.return_value = "chrome"
@@ -646,7 +672,8 @@ def test_launch_with_default_locale(monkeypatch):
     monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     # Test without locale parameter (should use default "en-US")
-    result = runner.invoke(app, ["launch"])
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"])
     assert result.exit_code == 0
 
     # Verify the default locale is used
@@ -705,8 +732,6 @@ def test_cache_cookies_for_session_success():
     with (
         patch("browser_launcher.cli.read_cookies_from_browser") as mock_read_cookies,
         patch("browser_launcher.cli.get_home_directory") as mock_get_home,
-        patch("browser_launcher.cli.tomli_w.dump") as mock_dump,
-        patch("builtins.open", mock_open()) as mock_file,
     ):
         mock_read_cookies.return_value = mock_browser_cookies
         mock_get_home.return_value.joinpath.return_value = "/fake/config.toml"
@@ -740,8 +765,7 @@ def test_cache_cookies_for_session_success():
         )
 
         # Verify config was saved to file
-        mock_file.assert_called_once()
-        mock_dump.assert_called_once_with(cookie_config_data, mock_file().__enter__())
+        mock_cookie_config.persist_to_file.assert_called_once()
 
         # Verify success messages
         success_call = mock_console.print.call_args_list[-1][0][
@@ -925,13 +949,14 @@ def test_cache_cookies_for_session_file_write_exception():
     with (
         patch("browser_launcher.cli.read_cookies_from_browser") as mock_read_cookies,
         patch("browser_launcher.cli.get_home_directory") as mock_get_home,
-        patch("builtins.open", mock_open()) as mock_file,
     ):
         mock_read_cookies.return_value = mock_browser_cookies
         mock_get_home.return_value.joinpath.return_value = "/fake/config.toml"
 
         # Simulate file write error
-        mock_file.side_effect = PermissionError("Permission denied")
+        mock_cookie_config.persist_to_file.side_effect = PermissionError(
+            "Permission denied"
+        )
 
         cache_cookies_for_session(
             mock_browser_controller,
@@ -996,8 +1021,6 @@ def test_cache_cookies_for_session_multiple_domains():
     with (
         patch("browser_launcher.cli.read_cookies_from_browser") as mock_read_cookies,
         patch("browser_launcher.cli.get_home_directory") as mock_get_home,
-        patch("browser_launcher.cli.tomli_w.dump"),
-        patch("builtins.open", mock_open()),
     ):
         mock_read_cookies.side_effect = mock_read_cookies_side_effect
         mock_get_home.return_value.joinpath.return_value = "/fake/config.toml"
@@ -1057,8 +1080,6 @@ def test_cache_cookies_for_session_duplicate_cookie_names():
     with (
         patch("browser_launcher.cli.read_cookies_from_browser") as mock_read_cookies,
         patch("browser_launcher.cli.get_home_directory") as mock_get_home,
-        patch("browser_launcher.cli.tomli_w.dump"),
-        patch("builtins.open", mock_open()),
     ):
         mock_read_cookies.return_value = mock_browser_cookies
         mock_get_home.return_value.joinpath.return_value = "/fake/config.toml"
@@ -1082,3 +1103,229 @@ def test_cache_cookies_for_session_duplicate_cookie_names():
         # Verify success message shows only 1 cookie
         success_call = mock_console.print.call_args_list[-1][0][0]
         assert "✅ Cached 1 cookies for" in success_call
+
+
+# ---------------------------------------------------------------------------
+# Tests for _normalize_cookie_domain
+# ---------------------------------------------------------------------------
+class TestNormalizeCookieDomain:
+    """Tests for the _normalize_cookie_domain helper."""
+
+    @pytest.mark.unit
+    def test_strips_leading_dot(self):
+        assert _normalize_cookie_domain(".apple.com") == "apple.com"
+
+    @pytest.mark.unit
+    def test_no_leading_dot(self):
+        assert _normalize_cookie_domain("apple.com") == "apple.com"
+
+    @pytest.mark.unit
+    def test_multiple_leading_dots(self):
+        assert _normalize_cookie_domain("..apple.com") == "apple.com"
+
+    @pytest.mark.unit
+    def test_empty_string(self):
+        assert _normalize_cookie_domain("") == ""
+
+    @pytest.mark.unit
+    def test_none_passthrough(self):
+        # None should be returned as-is (falsy path)
+        assert _normalize_cookie_domain(None) is None  # type: ignore[arg-type]
+
+    @pytest.mark.unit
+    def test_subdomain_preserved(self):
+        assert _normalize_cookie_domain("artists.apple.com") == "artists.apple.com"
+
+
+# ---------------------------------------------------------------------------
+# Tests for _resolve_cookie_domain
+# ---------------------------------------------------------------------------
+class TestResolveCookieDomain:
+    """Tests for the _resolve_cookie_domain helper."""
+
+    @pytest.mark.unit
+    def test_prefers_config_domain(self):
+        """Config domain takes precedence over browser domain."""
+        config_data = {
+            "users": {
+                "alice": {
+                    "prod": {
+                        "cookies": {
+                            "myacinfo": {"domain": "apple.com", "value": "x"},
+                        }
+                    }
+                }
+            }
+        }
+        result = _resolve_cookie_domain(
+            cookie_name="myacinfo",
+            browser_domain=".apple.com",
+            cookie_config_data=config_data,
+            user="alice",
+            env="prod",
+        )
+        assert result == "apple.com"
+
+    @pytest.mark.unit
+    def test_falls_back_to_normalised_browser_domain(self):
+        """When cookie is not in config, use normalised browser domain."""
+        config_data: dict = {"users": {"alice": {"prod": {"cookies": {}}}}}
+        result = _resolve_cookie_domain(
+            cookie_name="unknown_cookie",
+            browser_domain=".example.com",
+            cookie_config_data=config_data,
+            user="alice",
+            env="prod",
+        )
+        assert result == "example.com"
+
+    @pytest.mark.unit
+    def test_normalises_config_domain_with_leading_dot(self):
+        """Config domain with leading dot is also normalised."""
+        config_data: dict = {
+            "users": {
+                "alice": {
+                    "prod": {
+                        "cookies": {
+                            "sid": {"domain": ".example.com", "value": "v"},
+                        }
+                    }
+                }
+            }
+        }
+        result = _resolve_cookie_domain(
+            cookie_name="sid",
+            browser_domain=".example.com",
+            cookie_config_data=config_data,
+            user="alice",
+            env="prod",
+        )
+        assert result == "example.com"
+
+    @pytest.mark.unit
+    def test_returns_none_when_no_domain_available(self):
+        """Returns None when neither config nor browser domain is available."""
+        config_data: dict = {"users": {"alice": {"prod": {"cookies": {}}}}}
+        result = _resolve_cookie_domain(
+            cookie_name="missing",
+            browser_domain=None,
+            cookie_config_data=config_data,
+            user="alice",
+            env="prod",
+        )
+        assert result is None
+
+    @pytest.mark.unit
+    def test_handles_missing_config_sections(self):
+        """Gracefully handles missing users/env/cookies sections."""
+        result = _resolve_cookie_domain(
+            cookie_name="myacinfo",
+            browser_domain=".apple.com",
+            cookie_config_data={},
+            user="alice",
+            env="prod",
+        )
+        assert result == "apple.com"
+
+
+# ---------------------------------------------------------------------------
+# Tests for _cache_auth_result_cookies domain resolution
+# ---------------------------------------------------------------------------
+class TestCacheAuthResultCookiesDomainResolution:
+    """Tests that _cache_auth_result_cookies resolves domains correctly."""
+
+    @pytest.mark.unit
+    def test_uses_config_domain_not_browser_domain(self):
+        """Auth cookies should be cached with config domain, not browser domain."""
+        mock_browser = MagicMock()
+        mock_cookie_config = MagicMock()
+        mock_cookie_config.config_data = {
+            "users": {
+                "alice": {
+                    "prod": {
+                        "cookies": {
+                            "myacinfo": {"domain": "apple.com", "value": "old"},
+                        }
+                    }
+                }
+            }
+        }
+        mock_logger = MagicMock()
+        mock_console = MagicMock()
+
+        auth_cookies = [
+            {"name": "myacinfo", "value": "newval", "domain": ".apple.com"},
+        ]
+
+        _cache_auth_result_cookies(
+            auth_cookies=auth_cookies,
+            browser_controller=mock_browser,
+            cookie_config=mock_cookie_config,
+            user="alice",
+            env="prod",
+            domain="artists.apple.com",  # launch URL domain — should NOT be used
+            logger=mock_logger,
+            console=mock_console,
+        )
+
+        # Should be called with config domain "apple.com", not ".apple.com" or
+        # "artists.apple.com"
+        mock_cookie_config.update_cookie_cache.assert_called_once_with(
+            "alice", "prod", "apple.com", "myacinfo", "newval"
+        )
+
+    @pytest.mark.unit
+    def test_falls_back_to_normalised_browser_domain_for_unknown_cookie(self):
+        """Cookies not in config fall back to normalised browser domain."""
+        mock_browser = MagicMock()
+        mock_cookie_config = MagicMock()
+        mock_cookie_config.config_data = {"users": {"alice": {"prod": {"cookies": {}}}}}
+        mock_logger = MagicMock()
+        mock_console = MagicMock()
+
+        auth_cookies = [
+            {"name": "new_cookie", "value": "val", "domain": ".example.com"},
+        ]
+
+        _cache_auth_result_cookies(
+            auth_cookies=auth_cookies,
+            browser_controller=mock_browser,
+            cookie_config=mock_cookie_config,
+            user="alice",
+            env="prod",
+            domain="sub.example.com",
+            logger=mock_logger,
+            console=mock_console,
+        )
+
+        mock_cookie_config.update_cookie_cache.assert_called_once_with(
+            "alice", "prod", "example.com", "new_cookie", "val"
+        )
+
+    @pytest.mark.unit
+    def test_falls_back_to_normalised_launch_domain_when_no_browser_domain(self):
+        """When cookie has no domain, use normalised launch URL domain."""
+        mock_browser = MagicMock()
+        mock_cookie_config = MagicMock()
+        mock_cookie_config.config_data = {"users": {"alice": {"prod": {"cookies": {}}}}}
+        mock_logger = MagicMock()
+        mock_console = MagicMock()
+
+        auth_cookies = [
+            {"name": "session", "value": "abc"},  # no "domain" key
+        ]
+
+        _cache_auth_result_cookies(
+            auth_cookies=auth_cookies,
+            browser_controller=mock_browser,
+            cookie_config=mock_cookie_config,
+            user="alice",
+            env="prod",
+            domain=".example.com",
+            logger=mock_logger,
+            console=mock_console,
+        )
+
+        mock_cookie_config.update_cookie_cache.assert_called_once_with(
+            "alice", "prod", "example.com", "session", "abc"
+        )

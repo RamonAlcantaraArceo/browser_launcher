@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse
 
-import tomli_w
 import typer
 from r3a_logger.logger import (  # type: ignore[import-untyped]
     get_current_logger,
@@ -19,6 +18,8 @@ from r3a_logger.logger import (  # type: ignore[import-untyped]
 from rich.console import Console
 from rich.panel import Panel
 
+from browser_launcher.auth.factory import AuthFactory
+from browser_launcher.auth.retry import AuthRetryHandler
 from browser_launcher.browsers.factory import BrowserFactory
 from browser_launcher.config import BrowserLauncherConfig
 from browser_launcher.cookies import (
@@ -26,12 +27,30 @@ from browser_launcher.cookies import (
     _dump_cookies_from_browser,
     inject_and_verify_cookies,
     read_cookies_from_browser,
+    write_cookies_to_browser,
 )
 from browser_launcher.screenshot import IDGenerator, _capture_screenshot
 from browser_launcher.utils import get_command_context
 
 app = typer.Typer(help="Browser launcher CLI tool")
 console = Console()
+
+AUTH_CONFIG_FIELD_NAMES = {
+    "timeout_seconds",
+    "retry_attempts",
+    "retry_delay_seconds",
+    "headless",
+    "credentials",
+    "custom_options",
+    "user_agent",
+    "window_size",
+    "page_load_timeout",
+    "element_wait_timeout",
+    "screenshot_on_failure",
+    "screenshot_directory",
+    "allowed_domains",
+    "required_cookies",
+}
 
 
 def get_home_directory() -> Path:
@@ -108,6 +127,69 @@ def _setup_logging(
         logger_name="browser_launcher",
         log_file_name=None,
     )
+
+
+def _normalize_cookie_domain(domain: str) -> str:
+    """Normalize a cookie domain by stripping leading dots.
+
+    Browsers often return cookie domains with a leading dot (e.g.,
+    ``.apple.com``), but the config stores them without (e.g.,
+    ``apple.com``). This ensures consistent domain representation for
+    cache lookups.
+
+    Args:
+        domain: The raw cookie domain string from the browser or config.
+
+    Returns:
+        The domain string with any leading dot removed.
+    """
+    return domain.lstrip(".") if domain else domain
+
+
+def _resolve_cookie_domain(
+    cookie_name: str,
+    browser_domain: Optional[str],
+    cookie_config_data: dict[str, Any],
+    user: str,
+    env: str,
+) -> Optional[str]:
+    """Resolve the correct domain for a cookie, preferring the config value.
+
+    Looks up the cookie name in the ``[users.{user}.{env}.cookies]``
+    configuration to find the authoritative domain.  If the cookie is not
+    found in config, falls back to the normalised browser-reported domain.
+
+    Args:
+        cookie_name: The name of the cookie to resolve the domain for.
+        browser_domain: The domain reported by the browser for this cookie.
+        cookie_config_data: The full configuration data structure.
+        user: The user identifier for config lookup.
+        env: The environment name for config lookup.
+
+    Returns:
+        The resolved domain string, or ``None`` if no domain could be
+        determined.
+    """
+    # Try config first (authoritative source)
+    try:
+        user_env_cookies = (
+            cookie_config_data.get("users", {})
+            .get(user, {})
+            .get(env, {})
+            .get("cookies", {})
+        )
+        if cookie_name in user_env_cookies:
+            config_domain = user_env_cookies[cookie_name].get("domain")
+            if config_domain:
+                return _normalize_cookie_domain(config_domain)
+    except (KeyError, TypeError, AttributeError):
+        pass
+
+    # Fall back to normalised browser domain
+    if browser_domain:
+        return _normalize_cookie_domain(browser_domain)
+
+    return None
 
 
 def cache_cookies_for_session(
@@ -197,9 +279,7 @@ def cache_cookies_for_session(
 
             # Save config back to file
             config_file = get_home_directory() / "config.toml"
-
-            with open(config_file, "wb") as f:
-                tomli_w.dump(cookie_config.config_data, f)
+            cookie_config.persist_to_file(config_file)
 
             console.print(
                 f"✅ Cached {len(target_browser_cookies)} cookies for "
@@ -218,6 +298,305 @@ def cache_cookies_for_session(
     except Exception as e:
         console.print(f"❌ Error caching cookies: {e}")
         logger.error(f"Error caching cookies: {e}", exc_info=True)
+
+
+def _persist_cookie_config(
+    cookie_config: CookieConfig,
+    logger: logging.Logger,
+    console: Console,
+) -> None:
+    """Persist current cookie configuration to disk."""
+    config_file = get_home_directory() / "config.toml"
+    cookie_config.persist_to_file(config_file)
+    logger.debug(f"Persisted cookie cache to {config_file}")
+    console.print("✅ Saved authentication cookies to cache")
+
+
+def _get_user_env_auth_modules(
+    config_loader: BrowserLauncherConfig,
+    user: str,
+    env: str,
+) -> list[str]:
+    """Get configured auth modules in [users.{user}.{env}.auth]."""
+    auth_section = (
+        config_loader.config_data.get("users", {})
+        .get(user, {})
+        .get(env, {})
+        .get("auth", {})
+    )
+    if not isinstance(auth_section, dict):
+        return []
+
+    return [
+        key
+        for key, value in auth_section.items()
+        if isinstance(value, dict) and key not in AUTH_CONFIG_FIELD_NAMES
+    ]
+
+
+def _select_auth_module(
+    config_loader: BrowserLauncherConfig,
+    user: str,
+    env: str,
+) -> Optional[str]:
+    """Select an auth module name from user/env scope first, then global scope."""
+    logger = get_current_logger()
+    if not logger:
+        logger = logging.getLogger(__name__)
+    logger.debug(f"Selecting authentication module for user={user}, env={env}")
+
+    user_env_modules = _get_user_env_auth_modules(config_loader, user, env)
+    if user_env_modules:
+        selected = user_env_modules[0]
+        logger.info(f"Selected auth module '{selected}' from user/env configuration")
+        return selected
+
+    configured_modules = config_loader.get_available_auth_modules()
+    if configured_modules and len(configured_modules) > 0:
+        selected = next(iter(configured_modules.keys()))
+        logger.info(f"Selected auth module '{selected}' from global configuration")
+        return selected
+
+    logger.info("No authentication modules are configured in the config file.")
+    return None
+
+
+def _cache_auth_result_cookies(
+    auth_cookies: list[dict[str, Any]],
+    browser_controller: Any,
+    cookie_config: CookieConfig,
+    user: str,
+    env: str,
+    domain: Optional[str],
+    logger: logging.Logger,
+    console: Console,
+) -> None:
+    """Inject authenticated cookies into browser and persist cookie cache."""
+    logger.info(f"Caching {len(auth_cookies)} authentication cookies")
+    logger.debug(f"Cookie names: {[c.get('name') for c in auth_cookies]}")
+
+    write_cookies_to_browser(browser_controller.driver, auth_cookies)
+    logger.debug("Cookies written to browser")
+
+    cached_count = 0
+    for cookie in auth_cookies:
+        cookie_name = cookie.get("name")
+        raw_browser_domain = cookie.get("domain")
+
+        # Resolve domain: prefer config-defined domain, then normalised
+        # browser domain, then normalised launch-URL domain.
+        cookie_domain = _resolve_cookie_domain(
+            cookie_name=cookie_name or "",
+            browser_domain=raw_browser_domain,
+            cookie_config_data=cookie_config.config_data,
+            user=user,
+            env=env,
+        )
+        if not cookie_domain and domain:
+            cookie_domain = _normalize_cookie_domain(domain)
+
+        if not cookie_name or not cookie_domain:
+            logger.warning(
+                f"Skipping cookie with missing name or domain: "
+                f"name={cookie_name}, domain={cookie_domain}"
+            )
+            continue
+
+        if (
+            raw_browser_domain
+            and _normalize_cookie_domain(raw_browser_domain) != cookie_domain
+        ):
+            logger.info(
+                f"Cookie '{cookie_name}' domain resolved from config: "
+                f"browser='{raw_browser_domain}' -> config='{cookie_domain}'"
+            )
+
+        logger.debug(
+            f"Updating cookie cache: {cookie_name} for {user}/{env}/{cookie_domain}"
+        )
+        cookie_config.update_cookie_cache(
+            user,
+            env,
+            cookie_domain,
+            cookie_name,
+            cookie.get("value", ""),
+        )
+        cached_count += 1
+
+    logger.info(f"Cached {cached_count} cookies to disk")
+    _persist_cookie_config(cookie_config, logger, console)
+
+
+def _run_authentication_attempt(
+    authenticator: Any, launch_url: str
+) -> list[dict[str, Any]]:
+    """Run one authenticator attempt and return cookies on success."""
+    logger = get_current_logger()
+    if not logger:
+        logger = logging.getLogger(__name__)
+    logger.info(f"Running authentication attempt for URL: {launch_url}")
+    logger.debug(f"Authenticator: {authenticator.__class__.__name__}")
+
+    try:
+        auth_result = authenticator.authenticate(launch_url)
+
+        logger.debug(
+            f"Authentication result: success={auth_result.success}, "
+            f"cookies={auth_result.cookie_count}, "
+            f"duration={auth_result.duration_seconds}s"
+        )
+
+        if not auth_result.success:
+            error_msg = auth_result.error_message or "Authentication failed"
+            logger.warning(f"Authentication failed: {error_msg}")
+            raise RuntimeError(error_msg)
+
+        if not auth_result.cookies:
+            logger.warning("Authentication succeeded but returned no cookies")
+            raise RuntimeError("Authentication returned no cookies")
+
+        logger.info(
+            f"Authentication successful: {auth_result.cookie_count} cookies obtained"
+        )
+        return auth_result.cookies
+
+    except Exception as e:
+        logger.error(
+            f"Authentication attempt failed with {type(e).__name__}: {e}",
+            exc_info=True,
+        )
+        raise
+
+
+def attempt_authentication(  # noqa: C901
+    browser_controller: Any,
+    config_loader: BrowserLauncherConfig,
+    cookie_config: CookieConfig,
+    user: str,
+    env: str,
+    domain: Optional[str],
+    launch_url: str,
+    logger: logging.Logger,
+    console: Console,
+) -> Optional[list[dict[str, Any]]]:
+    """Attempt authentication using cache first, then auth module with retries."""
+    logger.info(f"Starting authentication attempt for {user}/{env}")
+    logger.debug(f"Launch URL: {launch_url}, Domain: {domain}")
+
+    # Try cached cookies first
+    injected_cookies = inject_and_verify_cookies(
+        browser_controller,
+        user,
+        env,
+        cookie_config,
+    )
+    if injected_cookies:
+        logger.info(
+            f"Using {len(injected_cookies)} valid cached cookies for {user}/{env}"
+        )
+        return injected_cookies
+
+    logger.debug("No valid cached cookies found, attempting fresh authentication")
+
+    module_name = _select_auth_module(config_loader, user, env)
+    if not module_name:
+        logger.info("No authentication module configured; continuing without auth")
+        return None
+
+    logger.info(f"Attempting authentication with module '{module_name}'")
+
+    try:
+        auth_config = config_loader.get_auth_config(
+            module_name=module_name,
+            user=user,
+            env=env,
+        )
+        logger.debug(
+            f"Loaded auth config: timeout={auth_config.timeout_seconds}s, "
+            f"retry={auth_config.retry_attempts}"
+        )
+    except Exception as e:
+        logger.error(
+            f"Failed to load auth config for '{module_name}': {e}", exc_info=True
+        )
+        logger.warning("Continuing without authentication due to config error")
+        return None
+
+    try:
+        authenticator = AuthFactory.create(module_name, auth_config)
+    except Exception as e:
+        logger.error(
+            f"Failed to create authenticator '{module_name}': {e}",
+            exc_info=True,
+        )
+        logger.warning("Continuing without authentication due to creation error")
+        return None
+
+    if hasattr(authenticator, "setup_driver"):
+        logger.debug("Setting up authenticator driver")
+        authenticator.setup_driver(browser_controller.driver)
+
+    # Create retry handler
+    retry_handler = AuthRetryHandler(
+        config=auth_config,
+        console=console,
+        logger=logger,
+    )
+
+    total_attempts = max(1, auth_config.retry_attempts + 1)
+    logger.info(f"Starting authentication with up to {total_attempts} attempts")
+
+    while retry_handler.current_attempt < total_attempts:
+        retry_handler.increment_attempt()
+        attempt = retry_handler.current_attempt
+
+        logger.info(f"Authentication attempt {attempt}/{total_attempts}")
+
+        try:
+            auth_cookies = _run_authentication_attempt(authenticator, launch_url)
+            _cache_auth_result_cookies(
+                auth_cookies=auth_cookies,
+                browser_controller=browser_controller,
+                cookie_config=cookie_config,
+                user=user,
+                env=env,
+                domain=domain,
+                logger=logger,
+                console=console,
+            )
+            logger.info(
+                f"Authentication succeeded with module '{module_name}' "
+                f"on attempt {attempt}/{total_attempts}"
+            )
+            return auth_cookies
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.warning(
+                f"Authentication attempt {attempt}/{total_attempts} failed: {e}",
+                exc_info=True,
+            )
+
+            # Check if we should retry
+            if retry_handler.current_attempt >= total_attempts:
+                logger.warning(
+                    f"Maximum authentication attempts ({total_attempts}) reached"
+                )
+                break
+
+            if not retry_handler.should_retry(error_message=error_msg):
+                logger.info("User chose not to retry authentication")
+                break
+
+            # Update credentials if available
+            if auth_config.credentials:
+                logger.debug("Prompting for updated credentials")
+                auth_config.credentials = retry_handler.prompt_for_credentials()
+
+    logger.warning(
+        "Authentication not completed; continuing without authenticated cookies"
+    )
+    return None
 
 
 @app.command()
@@ -378,6 +757,7 @@ def launch(  # noqa: C901
     # Always read console_logging from config file
     console_logging = get_console_logging_setting()
     logging_level = get_logging_level_setting()
+
     # Initialize logging first
     _setup_logging(
         verbose=verbose,
@@ -472,25 +852,39 @@ def launch(  # noqa: C901
         logger.warning(f"Could not extract domain from URL {launch_url}: {e}")
     # Continue execution even if domain extraction fails
 
-    # Load cookie config and inject cached cookies if available
+    # Load cookie config and perform authentication flow (cache first)
     try:
         cookie_config_data = config_loader.config_data
         cookie_config = CookieConfig(cookie_config_data)
+
         logger.info(
-            f"Attempting to inject cookies for domain {domain} (user={user}, env={env})"
+            f"Attempting authentication for domain {domain} (user={user}, env={env})"
         )
 
-        injected_cookies = inject_and_verify_cookies(
-            browser_controller, user, env, cookie_config
+        injected_cookies = attempt_authentication(
+            browser_controller=browser_controller,
+            config_loader=config_loader,
+            cookie_config=cookie_config,
+            user=user,
+            env=env,
+            domain=domain,
+            launch_url=launch_url,
+            logger=logger,
+            console=console,
         )
 
         if injected_cookies:
+            # Log and inform user of injected cookies
             console.print(
-                f"✅ Injected {len(injected_cookies)} cookies: "
+                f"✅ Applied {len(injected_cookies)} cookies: "
                 f"{[cookie['name'] for cookie in injected_cookies]}"
             )
 
             if url:
+                # TODO: improve config on this so that there is a 2 url pattern
+                # 1 that matches domain for cookie injection
+                # another that is the actual launch url
+                # they could be same or different
                 browser_controller.safe_get_address(url + "/ui")
 
     except Exception as e:
@@ -508,11 +902,17 @@ def launch(  # noqa: C901
     # Try to set terminal to unbuffered mode for immediate character reading
     old_settings = None
     try:
-        old_settings = termios.tcgetattr(sys.stdin)
-        tty.setcbreak(sys.stdin.fileno())
-    except (AttributeError, termios.error, OSError):
-        # If we can't set terminal mode (e.g., in tests or non-TTY), continue anyway
-        pass
+        # Guard against non-TTY or closed stdin (e.g., during tests)
+        if not sys.stdin.closed and sys.stdin.isatty():
+            old_settings = termios.tcgetattr(sys.stdin)
+            tty.setcbreak(sys.stdin.fileno())
+            logger.debug("Terminal mode set to unbuffered (cbreak)")
+        else:
+            logger.debug(
+                "stdin is not a TTY or is closed; skipping terminal mode configuration"
+            )
+    except (AttributeError, termios.error, OSError, ValueError) as e:
+        logger.debug(f"Could not configure terminal mode: {type(e).__name__}: {e}")
 
     try:
         console.print("Press Ctrl+D or q to exit.")
@@ -520,18 +920,29 @@ def launch(  # noqa: C901
         console.print("Press 's' to save/cache cookies for this session.")
         console.print("Press 'c' to dump all cookies from the browser.")
 
+        # Skip interactive loop if stdin is not a usable TTY (e.g., during tests)
+
         while True:
             if browser_controller.driver.session_id is None:
                 console.print(
                     "session has gone bad, you need to relaunch to be able to "
                     "capture screenshot"
                 )
-            char = sys.stdin.read(1)
-            if not char or char == "\x04" or char.lower() == "q":  # EOF or Ctrl+D
-                # Exit the loop
+                break
+            if sys.stdin.closed or not sys.stdin.isatty():
+                logger.debug(
+                    "Non-interactive environment detected; breaking out of input loop."
+                )
+                break
+            try:
+                char = sys.stdin.read(1)
+            except ValueError as e:
+                logger.debug(f"stdin closed or unavailable: {e}")
+                break
+
+            if not char or char == "\x04" or char.lower() == "q":
                 break
             elif char.lower() == "\n" or char.lower() == "\r":
-                # Capture screenshot
                 try:
                     screenshot_name = gen.generate()
                     _capture_screenshot(
@@ -547,7 +958,6 @@ def launch(  # noqa: C901
                     )
                     raise e
             elif char.lower() == "s":
-                # Save/cache cookies for this session
                 cache_cookies_for_session(
                     browser_controller,
                     user,
@@ -558,9 +968,7 @@ def launch(  # noqa: C901
                     logger,
                     console,
                 )
-
             elif char.lower() == "c":
-                # Dump all cookies from the browser
                 _dump_cookies_from_browser(browser_controller.driver, logger, console)
 
     except EOFError:
@@ -569,9 +977,13 @@ def launch(  # noqa: C901
         # Restore original terminal settings if they were saved
         if old_settings is not None:
             try:
-                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
-            except (termios.error, OSError):
-                pass
+                if not sys.stdin.closed and sys.stdin.isatty():
+                    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+                    logger.debug("Terminal mode restored")
+            except (termios.error, OSError, ValueError) as e:
+                logger.debug(
+                    f"Could not restore terminal mode: {type(e).__name__}: {e}"
+                )
         try:
             browser_controller.driver.close()
         except Exception:
