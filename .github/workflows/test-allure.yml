@@ -80,6 +80,7 @@ jobs:
         with:
           name: allure-results-${{ matrix.python-version }}
           path: allure-results/
+          if-no-files-found: error
           retention-days: 30
 
       - name: Upload HTML Coverage Report
@@ -88,6 +89,7 @@ jobs:
         with:
           name: coverage-report-${{ matrix.python-version }}
           path: htmlcov/
+          if-no-files-found: warn
           retention-days: 30
 
   allure-report:
@@ -103,17 +105,25 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Download Allure Results
-        uses: actions/download-artifact@v4
-        with:
-          path: allure-reports
-
       - name: Setup Allure
         run: npm install -g allure-commandline
 
+      - name: Download Allure Results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: allure-results-*
+          path: allure-results
+          merge-multiple: true
+
+      - name: Debug merged files
+        run: |
+          echo "Merged files count:"
+          find allure-results -type f | wc -l
+          find allure-results -maxdepth 2 -type f | head -n 30
+
       - name: Generate Allure Report
         run: |
-          allure generate allure-reports/ -o allure-report/ --clean
+          allure generate allure-results -o allure-report --clean
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
