@@ -141,6 +141,14 @@ jobs:
           import pathlib
           import sys
 
+          def normalize_python_label(raw):
+            if raw is None:
+              return None
+            value = str(raw).strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+              value = value[1:-1].strip()
+            return value
+
           results_dir = pathlib.Path("allure-results")
           expected = {
               f"Python {version.strip()}"
@@ -156,9 +164,14 @@ jobs:
                   continue
               for parameter in data.get("parameters", []):
                   if parameter.get("name") == "python_version":
-                      value = parameter.get("value")
+                    value = normalize_python_label(parameter.get("value"))
                       if value:
-                          found.add(str(value))
+                      found.add(value)
+                for label in data.get("labels", []):
+                  if label.get("name") == "subSuite":
+                    value = normalize_python_label(label.get("value"))
+                    if value and value.startswith("Python "):
+                      found.add(value)
 
           print("Expected Python labels:", sorted(expected))
           print("Found Python labels:", sorted(found))
