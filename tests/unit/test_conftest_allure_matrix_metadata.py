@@ -67,7 +67,6 @@ def test_allure_python_version_metadata_applies_hierarchy_and_parameter(monkeypa
     fake_request = _FakeRequest()
 
     monkeypatch.setenv("ALLURE_PYTHON_VERSION", "3.11")
-    monkeypatch.setattr(module, "HAS_ALLURE", True)
     monkeypatch.setattr(module, "allure", fake_allure)
 
     _invoke_fixture(module, "allure_python_version_metadata", request=fake_request)
@@ -78,21 +77,3 @@ def test_allure_python_version_metadata_applies_hierarchy_and_parameter(monkeypa
     assert fake_allure.dynamic.parent_suite_calls == [(("tests.unit",), {})]
     assert fake_allure.dynamic.suite_calls == [(("Python 3.11",), {})]
     assert fake_allure.dynamic.sub_suite_calls == [(("test_auth_config",), {})]
-
-
-@pytest.mark.unit
-def test_allure_python_version_metadata_noops_without_allure(monkeypatch):
-    module = importlib.import_module("conftest")
-    fake_allure = _FakeAllure()
-    fake_request = _FakeRequest()
-
-    monkeypatch.setenv("ALLURE_PYTHON_VERSION", "3.12")
-    monkeypatch.setattr(module, "HAS_ALLURE", False)
-    monkeypatch.setattr(module, "allure", fake_allure)
-
-    _invoke_fixture(module, "allure_python_version_metadata", request=fake_request)
-
-    assert fake_allure.dynamic.parameter_calls == []
-    assert fake_allure.dynamic.parent_suite_calls == []
-    assert fake_allure.dynamic.suite_calls == []
-    assert fake_allure.dynamic.sub_suite_calls == []
