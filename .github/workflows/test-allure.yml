@@ -159,14 +159,14 @@ jobs:
           found = set()
           for file_path in results_dir.glob("*-result.json"):
               try:
-                  data = json.loads(file_path.read_text())
+                data = json.loads(file_path.read_text())
               except Exception:
-                  continue
+                continue
               for parameter in data.get("parameters", []):
-                  if parameter.get("name") == "python_version":
-                    value = normalize_python_label(parameter.get("value"))
-                      if value:
-                      found.add(value)
+                if parameter.get("name") == "python_version":
+                  value = normalize_python_label(parameter.get("value"))
+                  if value:
+                    found.add(value)
                 for label in data.get("labels", []):
                   if label.get("name") == "subSuite":
                     value = normalize_python_label(label.get("value"))
@@ -177,8 +177,8 @@ jobs:
           print("Found Python labels:", sorted(found))
           missing = expected - found
           if missing:
-              print("Missing Python labels:", sorted(missing))
-              sys.exit(1)
+            print("Missing Python labels:", sorted(missing))
+            sys.exit(1)
           PY
 
       - name: Write Allure executor and environment metadata
