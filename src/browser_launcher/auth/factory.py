@@ -232,7 +232,8 @@ class AuthFactory:
                 )
             else:
                 logger.debug(
-                    f"Using base validate_config method for {authenticator_class.__name__}"
+                    "Using base validate_config method for"
+                    f" {authenticator_class.__name__}"
                 )
 
             result = authenticator_class.validate_config(config)
@@ -272,7 +273,9 @@ class AuthFactory:
 
         base_validate = AuthenticatorBase.validate_config
         auth_validate = getattr(authenticator_class, "validate_config", None)
-        has_custom_validation = auth_validate is not None and auth_validate is not base_validate
+        has_custom_validation = (
+            auth_validate is not None and auth_validate is not base_validate
+        )
 
         info = {
             "name": module_name,
