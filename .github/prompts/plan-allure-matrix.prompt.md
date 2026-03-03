@@ -2,8 +2,6 @@
 
 This plan keeps a single GitHub Pages Allure report, but makes each Python-version execution a distinct test instance so the total reflects all matrix runs (target: ~5× current count). The core change is to add stable per-test version identity in pytest metadata (not categories), then keep merge/generate flow as-is with stronger validation. Categories are for failure taxonomy and are not the right primitive for version separation.
 
-When implementing ask for confirmation before moving to next step.
-
 **Steps**
 1. Add tests first for new Allure metadata behavior in [tests](tests), targeting [tests/conftest.py](tests/conftest.py) hooks/fixtures.
 2. In [tests/conftest.py](tests/conftest.py), add an `autouse` fixture that reads matrix version from env and applies `allure.dynamic.parameter` (identity key) plus `allure.dynamic.sub_suite` (UI grouping label: “Python 3.x”).

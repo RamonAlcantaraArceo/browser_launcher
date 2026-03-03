@@ -56,6 +56,8 @@ jobs:
         run: poetry run mypy src/ tests/ || true
 
       - name: Run unit tests with coverage
+        env:
+          ALLURE_PYTHON_VERSION: ${{ matrix.python-version }}
         run: |
           poetry run pytest tests/unit/ \
             -v \
@@ -66,6 +68,14 @@ jobs:
             --alluredir=allure-results \
             -n auto \
             --tb=short
+
+      - name: Validate raw Allure result files
+        if: always()
+        run: |
+          test -d allure-results || (echo "Missing allure-results directory" && exit 1)
+          count=$(find allure-results -type f \( -name '*-result.json' -o -name '*-container.json' \) | wc -l | tr -d ' ')
+          echo "allure result/container files: $count"
+          test "$count" -gt 0 || (echo "No Allure test data generated" && exit 1)
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -97,6 +107,8 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: always()
+    env:
+      EXPECTED_PYTHON_VERSIONS: "3.10,3.11,3.12,3.13,3.14"
     permissions:
       pages: write
       id-token: write
@@ -121,9 +133,85 @@ jobs:
           find allure-results -type f | wc -l
           find allure-results -maxdepth 2 -type f | head -n 30
 
+      - name: Validate matrix Python-version metadata in merged results
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+
+          results_dir = pathlib.Path("allure-results")
+          expected = {
+              f"Python {version.strip()}"
+              for version in os.environ["EXPECTED_PYTHON_VERSIONS"].split(",")
+              if version.strip()
+          }
+
+          found = set()
+          for file_path in results_dir.glob("*-result.json"):
+              try:
+                  data = json.loads(file_path.read_text())
+              except Exception:
+                  continue
+              for parameter in data.get("parameters", []):
+                  if parameter.get("name") == "python_version":
+                      value = parameter.get("value")
+                      if value:
+                          found.add(str(value))
+
+          print("Expected Python labels:", sorted(expected))
+          print("Found Python labels:", sorted(found))
+          missing = expected - found
+          if missing:
+              print("Missing Python labels:", sorted(missing))
+              sys.exit(1)
+          PY
+
+      - name: Write Allure executor and environment metadata
+        run: |
+          cat > allure-results/executor.json <<EOF
+          {
+            "name": "GitHub Actions",
+            "type": "github",
+            "buildName": "${{ github.workflow }} #${{ github.run_number }}",
+            "buildOrder": ${{ github.run_number }},
+            "buildUrl": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }
+          EOF
+
+          cat > allure-results/environment.properties <<EOF
+          Python Versions=${EXPECTED_PYTHON_VERSIONS}
+          Workflow=${{ github.workflow }}
+          Repository=${{ github.repository }}
+          Branch=${{ github.ref_name }}
+          Commit=${{ github.sha }}
+          Run ID=${{ github.run_id }}
+          Run Number=${{ github.run_number }}
+          EOF
+
       - name: Generate Allure Report
         run: |
           allure generate allure-results -o allure-report --clean
+
+      - name: Validate generated Allure report summary
+        run: |
+          python - <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          summary_path = pathlib.Path("allure-report/widgets/summary.json")
+          if not summary_path.exists():
+              print("Missing summary.json")
+              sys.exit(1)
+
+          summary = json.loads(summary_path.read_text())
+          total = summary.get("statistic", {}).get("total", 0)
+          print("Allure total tests:", total)
+          if total <= 0:
+              sys.exit(1)
+          PY
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

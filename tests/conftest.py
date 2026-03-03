@@ -1,5 +1,7 @@
 """Shared pytest fixtures for browser_launcher tests."""
 
+import os
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -27,6 +29,23 @@ def allure_markers(request):
     for marker in request.node.iter_markers():
         if marker.name in ("unit", "smoke"):
             allure.feature(marker.name.capitalize())
+
+
+@pytest.fixture(autouse=True)
+def allure_python_version_metadata():
+    """Add Python-version metadata to each test in Allure reports."""
+    if not HAS_ALLURE:
+        return
+
+    python_version = os.getenv(
+        "ALLURE_PYTHON_VERSION", f"{sys.version_info.major}.{sys.version_info.minor}"
+    )
+    label = f"Python {python_version}"
+
+    if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "parameter"):
+        allure.dynamic.parameter("python_version", label)
+    if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "sub_suite"):
+        allure.dynamic.sub_suite(label)
 
 
 @pytest.fixture(autouse=True)

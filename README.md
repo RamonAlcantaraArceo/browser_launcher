@@ -318,6 +318,28 @@ choco install allure
 
 Then generate and view reports:
 ```bash
+poetry run pytest tests/unit/ -v --alluredir=allure-results
+allure serve allure-results/
+```
+
+### Allure in CI matrix runs
+
+The Allure GitHub Actions workflow runs the unit suite across Python 3.10–3.14 and merges all `allure-results` artifacts into one report.
+
+- Each test case is tagged with a `python_version` Allure parameter (for example, `Python 3.11`).
+- The same value is also applied as an Allure sub-suite label so the report can be navigated by Python version.
+- Categories are used for failure classification and are not used to split results by Python version.
+
+If the merged report looks like a single run instead of matrix totals, verify:
+
+- Test execution includes `ALLURE_PYTHON_VERSION` for each matrix job.
+- Pytest runs with `--alluredir=allure-results`.
+- The publish job merges all `allure-results-*` artifacts before generating the report.
+
+Local matrix simulation example:
+```bash
+ALLURE_PYTHON_VERSION=3.11 poetry run pytest tests/unit/ -v --alluredir=allure-results
+```
 poetry run pytest tests/ --alluredir=allure-results
 allure serve allure-results/
 ```
