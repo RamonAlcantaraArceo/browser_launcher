@@ -61,6 +61,7 @@ jobs:
         run: |
           poetry run pytest tests/unit/ \
             -v \
+            --color=no \
             --cov=src \
             --cov-report=xml \
             --cov-report=html \
@@ -167,11 +168,11 @@ jobs:
                   value = normalize_python_label(parameter.get("value"))
                   if value:
                     found.add(value)
-                for label in data.get("labels", []):
-                  if label.get("name") == "subSuite":
-                    value = normalize_python_label(label.get("value"))
-                    if value and value.startswith("Python "):
-                      found.add(value)
+              for label in data.get("labels", []):
+                if label.get("name") == "subSuite":
+                  value = normalize_python_label(label.get("value"))
+                  if value and value.startswith("Python "):
+                    found.add(value)
 
           print("Expected Python labels:", sorted(expected))
           print("Found Python labels:", sorted(found))

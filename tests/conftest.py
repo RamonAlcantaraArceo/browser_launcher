@@ -32,7 +32,7 @@ def allure_markers(request):
 
 
 @pytest.fixture(autouse=True)
-def allure_python_version_metadata():
+def allure_python_version_metadata(request):
     """Add Python-version metadata to each test in Allure reports."""
     if not HAS_ALLURE:
         return
@@ -41,11 +41,18 @@ def allure_python_version_metadata():
         "ALLURE_PYTHON_VERSION", f"{sys.version_info.major}.{sys.version_info.minor}"
     )
     label = f"Python {python_version}"
+    module_name = "unknown_module"
+    if hasattr(request, "node") and hasattr(request.node, "module"):
+        module_name = request.node.module.__name__.split(".")[-1]
 
     if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "parameter"):
         allure.dynamic.parameter("python_version", label)
+    if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "parent_suite"):
+        allure.dynamic.parent_suite("tests.unit")
+    if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "suite"):
+        allure.dynamic.suite(label)
     if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "sub_suite"):
-        allure.dynamic.sub_suite(label)
+        allure.dynamic.sub_suite(module_name)
 
 
 @pytest.fixture(autouse=True)
