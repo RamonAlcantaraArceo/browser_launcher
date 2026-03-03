@@ -5,25 +5,16 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import allure
 import pytest
 import toml
 
 from browser_launcher.browsers.base import BrowserConfig
 
-# Try importing allure, but continue if not installed
-try:
-    import allure
-
-    HAS_ALLURE = True
-except ImportError:
-    HAS_ALLURE = False
-
 
 @pytest.fixture(autouse=True)
 def allure_markers(request):
     """Automatically add test markers to Allure reports."""
-    if not HAS_ALLURE:
-        return
 
     # Add test markers
     for marker in request.node.iter_markers():
@@ -34,8 +25,6 @@ def allure_markers(request):
 @pytest.fixture(autouse=True)
 def allure_python_version_metadata(request):
     """Add Python-version metadata to each test in Allure reports."""
-    if not HAS_ALLURE:
-        return
 
     python_version = os.getenv(
         "ALLURE_PYTHON_VERSION", f"{sys.version_info.major}.{sys.version_info.minor}"
@@ -62,9 +51,6 @@ def capture_selenium_logs_on_failure(request):
 
     # Check if test failed
     if hasattr(request.node, "rep_call") and request.node.rep_call.failed:
-        if not HAS_ALLURE:
-            return
-
         # Attach failure information
         allure.attach(
             "Test failed during call phase",
@@ -91,8 +77,6 @@ def capture_selenium_logs_on_failure(request):
 @pytest.fixture
 def allure_environment_properties():
     """Set up Allure environment properties."""
-    if not HAS_ALLURE:
-        return
 
     if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "environment"):
         allure.dynamic.environment(
@@ -155,3 +139,56 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     rep = outcome.get_result()
     setattr(item, f"rep_{rep.when}", rep)
+
+
+# Automatically assign Allure feature labels based on test file path
+_FEATURE_LABELS = {
+    "config": "Config",
+    "cookies": "Cookies",
+    "cli": "CLI",
+    "utils": "Utils",
+    "auth": "Auth",
+    "browsers": "Browsers",
+}
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item):
+
+    path = Path(str(item.fspath))
+    try:
+        parts = path.parts
+        # Find the index of 'unit' in the path
+        if "unit" in parts or "smoke" in parts:
+            unit_idx = parts.index("unit") if "unit" in parts else parts.index("smoke")
+
+            # item.add_marker(
+            #     allure.story("Unit Tests" if "unit" in parts else "Smoke Tests")
+            # )
+
+            # The next part is the feature directory
+            if len(parts) > unit_idx + 1:
+                feature_dir = parts[unit_idx + 1]
+                feature_label = _FEATURE_LABELS.get(feature_dir)
+                if feature_label:
+                    item.add_marker(allure.feature(feature_label))
+
+                file_name = path.stem
+                if feature_label is None:
+                    feature_labels = [
+                        _FEATURE_LABELS[key]
+                        for key in _FEATURE_LABELS.keys()
+                        if key in file_name
+                    ]
+                    if feature_labels:
+                        for feature_label in feature_labels:
+                            item.add_marker(allure.feature(feature_label))
+
+                if not any(
+                    "feature" in marker.kwargs.values()
+                    for marker in item.iter_markers()
+                ):
+                    item.add_marker(allure.feature("Misc"))
+
+    except Exception:
+        pass
