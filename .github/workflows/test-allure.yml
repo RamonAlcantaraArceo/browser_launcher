@@ -79,7 +79,7 @@ jobs:
 
       - name: Upload Allure Results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: allure-results-${{ matrix.python-version }}
           path: allure-results/
@@ -87,7 +87,7 @@ jobs:
 
       - name: Upload HTML Coverage Report
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-report-${{ matrix.python-version }}
           path: htmlcov/
