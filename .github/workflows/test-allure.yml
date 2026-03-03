@@ -1,7 +1,8 @@
 name: Tests with Allure Reporting
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [fix/allure]
 
 jobs:
   test:
@@ -11,9 +12,11 @@ jobs:
         python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Set up Python ${{ matrix.python-version }}
+        id: setup-python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -38,6 +41,11 @@ jobs:
         run: |
           poetry install --with dev --verbose
           
+      - name: Verify installation
+        run: |
+          poetry run python --version
+          poetry run pytest --version
+
       - name: Run linting (Ruff)
         run: poetry run ruff check src/ tests/
 
@@ -58,14 +66,6 @@ jobs:
             --alluredir=allure-results \
             -n auto \
             --tb=short
-
-      - name: Run smoke tests sequentially
-        run: |
-          poetry run pytest tests/smoke/ \
-            -v \
-            --alluredir=allure-results \
-            --tb=short \
-            || true
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
