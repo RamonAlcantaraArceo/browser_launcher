@@ -1,8 +1,7 @@
 name: Tests with Allure Reporting
 
 on:
-  push:
-    branches: [fix/allure]
+  workflow_dispatch:
 
 jobs:
   test:
