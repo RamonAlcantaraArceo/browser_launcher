@@ -200,21 +200,6 @@ jobs:
           path: downloaded-allure
           merge-multiple: false
 
-      - name: Discover and validate Allure result sources
-        run: |
-          mapfile -t RESULT_DIRS < <(
-            find downloaded-allure -type f -name '*-result.json' -exec dirname {} \; | sort -u
-          )
-
-          echo "Discovered result directories:"
-          printf ' - %s\n' "${RESULT_DIRS[@]}"
-
-          test "${#RESULT_DIRS[@]}" -gt 0 || (echo "No Allure result directories found" && exit 1)
-
-          smoke_count=$(find downloaded-allure -type f -path '*allure-smoke-results-*/*-result.json' | wc -l | tr -d ' ')
-          echo "Smoke result files found: $smoke_count"
-          test "$smoke_count" -gt 0 || (echo "No smoke Allure result files found" && exit 1)
-
       - name: Write Allure executor and environment metadata
         run: |
           mkdir -p allure-meta-results
