@@ -23,7 +23,7 @@ def allure_markers(request: pytest.FixtureRequest):
 
 
 @pytest.fixture(autouse=True)
-def allure_python_version_metadata(request: pytest.FixtureRequest) -> None:
+def allure_python_version_metadata(request: pytest.FixtureRequest) -> None:  # noqa: C901
     """
     Configure Allure metadata for test execution based on Python version
     and module hierarchy.
@@ -73,13 +73,14 @@ def allure_python_version_metadata(request: pytest.FixtureRequest) -> None:
     if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "parameter"):
         allure.dynamic.parameter("python_version", label)
 
+    test_path = Path(str(request.node.fspath))
+
     # Set parent suite based on test file path
     if (
         hasattr(allure, "dynamic")
         and hasattr(allure.dynamic, "parent_suite")
         and hasattr(request.node, "fspath")
     ):
-        test_path = Path(str(request.node.fspath))
         # Extract the desired grouping from the test path for parent_suite
         # by joining parts after 'tests' directory
         if "tests" in test_path.parts:
@@ -90,7 +91,10 @@ def allure_python_version_metadata(request: pytest.FixtureRequest) -> None:
                 )
     else:
         # Fallback parent suite if dynamic methods are unavailable
-        allure.dynamic.parent_suite("misc")
+        try:
+            allure.dynamic.parent_suite("misc")
+        except AttributeError:
+            pass
 
     # Set suite based on Python version
     if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "suite"):
@@ -99,6 +103,36 @@ def allure_python_version_metadata(request: pytest.FixtureRequest) -> None:
     # Set sub-suite based on module name
     if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "sub_suite"):
         allure.dynamic.sub_suite(module_name)
+
+    pass
+
+    parts = test_path.parts
+    # Find the index of 'unit' in the path
+    if "unit" in parts or "smoke" in parts:
+        unit_idx = parts.index("unit") if "unit" in parts else parts.index("smoke")
+
+        # The next part is the feature directory
+        if len(parts) > unit_idx + 1:
+            feature_dir = parts[unit_idx + 1]
+            feature_label = _FEATURE_LABELS.get(feature_dir)
+            if feature_label:
+                allure.dynamic.feature(feature_label)
+
+            # If no feature label found, try to infer from file name
+            file_name = test_path.stem
+            if feature_label is None:
+                feature_labels = [
+                    _FEATURE_LABELS[key]
+                    for key in _FEATURE_LABELS.keys()
+                    if key in file_name
+                ]
+                if feature_labels:
+                    for fl in feature_labels:
+                        feature_label = fl
+                        allure.dynamic.feature(feature_label)
+
+            if feature_label is None:
+                allure.dynamic.feature("Misc")
 
 
 def pytest_addoption(parser):
@@ -148,7 +182,7 @@ def capture_selenium_logs_on_failure(request: pytest.FixtureRequest, tmp_path: P
             )
 
         # Try to capture logs from the test
-        if hasattr(request, "node") and hasattr(request.node, "_obj"):
+        if hasattr(request, "node"):
             # Attach driver logs if present
             project_root = tmp_path
 
@@ -243,41 +277,3 @@ _FEATURE_LABELS = {
     "auth": "Auth",
     "browsers": "Browsers",
 }
-
-
-@pytest.hookimpl(tryfirst=True)
-def pytest_runtest_setup(item):
-
-    path = Path(str(item.fspath))
-    try:
-        parts = path.parts
-        # Find the index of 'unit' in the path
-        if "unit" in parts or "smoke" in parts:
-            unit_idx = parts.index("unit") if "unit" in parts else parts.index("smoke")
-
-            # The next part is the feature directory
-            if len(parts) > unit_idx + 1:
-                feature_dir = parts[unit_idx + 1]
-                feature_label = _FEATURE_LABELS.get(feature_dir)
-                if feature_label:
-                    item.add_marker(allure.feature(feature_label))
-
-                file_name = path.stem
-                if feature_label is None:
-                    feature_labels = [
-                        _FEATURE_LABELS[key]
-                        for key in _FEATURE_LABELS.keys()
-                        if key in file_name
-                    ]
-                    if feature_labels:
-                        for feature_label in feature_labels:
-                            item.add_marker(allure.feature(feature_label))
-
-                if not any(
-                    "feature" in marker.kwargs.values()
-                    for marker in item.iter_markers()
-                ):
-                    item.add_marker(allure.feature("Misc"))
-
-    except Exception:
-        pass
