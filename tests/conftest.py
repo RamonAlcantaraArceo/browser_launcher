@@ -85,7 +85,9 @@ def allure_python_version_metadata(request: pytest.FixtureRequest) -> None:
         if "tests" in test_path.parts:
             tests_idx = test_path.parts.index("tests")
             if len(test_path.parts) > tests_idx + 1:
-                allure.dynamic.parent_suite(".".join(test_path.parts[tests_idx + 1:-1]))
+                allure.dynamic.parent_suite(
+                    ".".join(test_path.parts[tests_idx + 1 : -1])
+                )
     else:
         # Fallback parent suite if dynamic methods are unavailable
         allure.dynamic.parent_suite("misc")
