@@ -5,6 +5,7 @@ import os
 from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
 
 from .base import BrowserLauncher
 
@@ -28,6 +29,14 @@ class FirefoxLauncher(BrowserLauncher):
             is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
             should_use_headless = (self.config and self.config.headless) or is_ci
 
+            # Add verbose logging for CI debugging
+            service = None
+            if is_ci and self.config.tmp_path:
+                service = Service(
+                    log_output=str(self.config.tmp_path / "driver.log"), verbose=True
+                )
+                self.logger.debug("Enabled FirefoxDriver verbose logging for CI")
+
             if should_use_headless:
                 firefox_options.add_argument("-headless")
                 self.logger.debug("Running Firefox in headless mode")
@@ -37,7 +46,10 @@ class FirefoxLauncher(BrowserLauncher):
                     "intl.accept_languages", self.config.locale
                 )
 
-            driver = webdriver.Firefox(options=firefox_options)
+            if service:
+                driver = webdriver.Firefox(service=service, options=firefox_options)
+            else:
+                driver = webdriver.Firefox(options=firefox_options)
             self._driver = driver
             self.safe_get_address(url)
             self.logger.debug(

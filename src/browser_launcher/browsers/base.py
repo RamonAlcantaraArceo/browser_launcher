@@ -12,12 +12,14 @@ from selenium.webdriver.remote.webdriver import WebDriver
 class BrowserConfig:
     """Configuration for a browser instance."""
 
+    # TODO add tmp_path so the selenium driver is placed there
     binary_path: Optional[Path]
     headless: bool
     user_data_dir: Optional[Path]
     custom_flags: Optional[List[str]]
     locale: str = "en-US"
     extra_options: Dict[str, Any] = field(default_factory=dict)
+    tmp_path: Optional[Path] = None
 
 
 class BrowserLauncher(ABC):

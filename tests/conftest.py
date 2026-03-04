@@ -49,7 +49,6 @@ def allure_python_version_metadata(request):
             if len(test_path.parts) > tests_idx + 1:
                 test_category = test_path.parts[tests_idx + 1]
                 allure.dynamic.parent_suite(f"tests.{test_category}")
-                print(f"Set parent suite to tests.{test_category} = {test_path}")
     else:
         allure.dynamic.parent_suite("tests.misc")
     if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "suite"):
@@ -58,34 +57,70 @@ def allure_python_version_metadata(request):
         allure.dynamic.sub_suite(module_name)
 
 
+def pytest_addoption(parser):
+    parser.addini(
+        "allure_always_capture_selenium_logs",
+        "Always capture Selenium logs for Allure (true/false/always/yes/1)",
+        default="false",
+    )
+    parser.addoption(
+        "--allure-always-capture-selenium-logs",
+        action="store",
+        default=None,
+        help="Always capture Selenium logs for Allure (true/false/always/yes/1)",
+    )
+
+
 @pytest.fixture(autouse=True)
-def capture_selenium_logs_on_failure(request):
-    """Capture and attach Selenium logs to Allure report on test failure."""
+def capture_selenium_logs_on_failure(request, tmp_path):  # noqa: C901
+    """Capture and attach Selenium logs to Allure report on test failure,
+    or always if configured."""
+    log_patterns = ["*driver.log"]
+
+    # Clean up any existing log files before the test runs
+    for pattern in log_patterns:
+        for log_file in tmp_path.glob(pattern):
+            if log_file.is_file():
+                try:
+                    log_file.unlink()
+                except Exception:
+                    pass
+
     yield
 
-    # Check if test failed
-    if hasattr(request.node, "rep_call") and request.node.rep_call.failed:
-        # Attach failure information
-        allure.attach(
-            "Test failed during call phase",
-            name="Test Failure",
-            attachment_type=allure.attachment_type.TEXT,
-        )
+    # Priority: env var > CLI option > pytest.ini
+    always_capture = request.config.getoption(
+        "--allure-always-capture-selenium-logs"
+    ) or request.config.getini("allure_always_capture_selenium_logs")
+    always_capture = str(always_capture).lower() in ("1", "true", "yes", "always")
+    test_failed = hasattr(request.node, "rep_call") and request.node.rep_call.failed
+
+    if test_failed or always_capture:
+        if test_failed:
+            allure.attach(
+                "Test failed during call phase",
+                name="Test Failure",
+                attachment_type=allure.attachment_type.TEXT,
+            )
 
         # Try to capture logs from the test
         if hasattr(request, "node") and hasattr(request.node, "_obj"):
-            try:
-                test_instance = request.node._obj()
-                if hasattr(test_instance, "driver") or hasattr(
-                    test_instance, "browser_controller"
-                ):
-                    allure.attach(
-                        "Selenium driver was active during test failure",
-                        name="Driver Status",
-                        attachment_type=allure.attachment_type.TEXT,
-                    )
-            except Exception:
-                pass
+            # Attach driver logs if present
+            project_root = tmp_path
+
+            for pattern in log_patterns:
+                for log_file in project_root.glob(pattern):
+                    if log_file.is_file():
+                        try:
+                            with open(log_file, "r") as f:
+                                log_content = f.read()
+                                allure.attach(
+                                    log_content,
+                                    name=log_file.name,
+                                    attachment_type=allure.attachment_type.TEXT,
+                                )
+                        except Exception:
+                            pass
 
 
 @pytest.fixture

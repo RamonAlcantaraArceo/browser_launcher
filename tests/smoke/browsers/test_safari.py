@@ -18,13 +18,14 @@ class TestSafariBrowserName:
     """Test suite for SafariLauncher implementation."""
 
     @pytest.fixture
-    def safari_config(self):
+    def safari_config(self, tmp_path: Path) -> BrowserConfig:
         """Create a basic Safari configuration for testing."""
         return BrowserConfig(
             binary_path=Path("/usr/bin/safari"),
             headless=False,
             user_data_dir=None,
             custom_flags=[],
+            tmp_path=tmp_path,
         )
 
     @pytest.fixture

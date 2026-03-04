@@ -15,7 +15,7 @@ class TestChromeBrowserName:
     """Test suite for ChromeLauncher implementation."""
 
     @pytest.fixture
-    def chrome_config(self):
+    def chrome_config(self, tmp_path: Path) -> BrowserConfig:
         """Create a basic Chrome configuration for testing."""
         # Use headless mode in CI, allow headfull locally for debugging
         is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
@@ -24,6 +24,7 @@ class TestChromeBrowserName:
             headless=is_ci,  # Dynamic based on environment
             user_data_dir=None,
             custom_flags=[],
+            tmp_path=tmp_path,
         )
 
     @pytest.fixture

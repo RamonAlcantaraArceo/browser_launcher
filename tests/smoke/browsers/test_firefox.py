@@ -16,7 +16,7 @@ class TestFirefoxLauncher:
     """Test suite for FirefoxLauncher implementation."""
 
     @pytest.fixture
-    def firefox_config(self):
+    def firefox_config(self, tmp_path: Path) -> BrowserConfig:
         """Create a basic Firefox configuration for testing."""
         # Use headless mode in CI, allow headfull locally for debugging
         is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
@@ -25,6 +25,7 @@ class TestFirefoxLauncher:
             headless=is_ci,  # Dynamic based on environment
             user_data_dir=None,
             custom_flags=[],
+            tmp_path=tmp_path,
         )
 
     @pytest.fixture
