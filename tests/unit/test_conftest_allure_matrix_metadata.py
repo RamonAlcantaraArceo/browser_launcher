@@ -82,7 +82,7 @@ def test_allure_python_version_metadata_applies_hierarchy_and_parameter(monkeypa
     assert fake_allure.dynamic.parameter_calls == [
         (("python_version", "Python 3.11"), {})
     ]
-    assert fake_allure.dynamic.parent_suite_calls == [(("tests.misc",), {})]
+    assert fake_allure.dynamic.parent_suite_calls == [(("misc",), {})]
     assert fake_allure.dynamic.suite_calls == [(("Python 3.11",), {})]
     assert fake_allure.dynamic.sub_suite_calls == [(("test_auth_config",), {})]
 
@@ -114,6 +114,6 @@ def test_allure_python_version_metadata_smoke_path(monkeypatch):
     assert fake_allure.dynamic.parameter_calls == [
         (("python_version", "Python 3.14"), {})
     ]
-    assert fake_allure.dynamic.parent_suite_calls == [(("tests.smoke",), {})]
+    assert fake_allure.dynamic.parent_suite_calls == [(("smoke",), {})]
     assert fake_allure.dynamic.suite_calls == [(("Python 3.14",), {})]
     assert fake_allure.dynamic.sub_suite_calls == [(("test_auth_integration",), {})]
