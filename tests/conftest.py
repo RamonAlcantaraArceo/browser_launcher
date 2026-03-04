@@ -13,7 +13,7 @@ from browser_launcher.browsers.base import BrowserConfig
 
 
 @pytest.fixture(autouse=True)
-def allure_markers(request):
+def allure_markers(request: pytest.FixtureRequest):
     """Automatically add test markers to Allure reports."""
 
     # Add test markers
@@ -23,36 +23,78 @@ def allure_markers(request):
 
 
 @pytest.fixture(autouse=True)
-def allure_python_version_metadata(request):
-    """Add Python-version metadata to each test in Allure reports."""
+def allure_python_version_metadata(request: pytest.FixtureRequest) -> None:
+    """
+    Configure Allure metadata for test execution based on Python version
+    and module hierarchy.
 
+    This fixture automatically attaches metadata to each test in Allure reports:
+    - Python version (from ALLURE_PYTHON_VERSION env var or current interpreter)
+    - Parent suite derived from test file path structure
+    - Suite labeled with Python version
+    - Sub-suite based on the test module name
+
+    The parent suite is constructed from the directory hierarchy following the 'tests'
+    directory in the test file path, enabling organized test grouping in Allure reports.
+
+    Args:
+        request: pytest request fixture providing access to test node information
+
+    Returns:
+        None
+
+    Raises:
+        AttributeError: If allure.dynamic methods are unavailable
+        (gracefully handled with hasattr checks)
+
+    Environment Variables:
+        ALLURE_PYTHON_VERSION: Optional override for Python version label
+        (defaults to major.minor format)
+
+    Example:
+        For a test at path 'tests/functional/auth/test_login.py':
+        - parent_suite: 'tests.functional.auth'
+        - suite: 'Python 3.14'
+        - sub_suite: 'test_login'
+    """
+
+    # Determine Python version label
     python_version = os.getenv(
         "ALLURE_PYTHON_VERSION", f"{sys.version_info.major}.{sys.version_info.minor}"
     )
     label = f"Python {python_version}"
+
+    # Extract module name from request
     module_name = "unknown_module"
     if hasattr(request, "node") and hasattr(request.node, "module"):
         module_name = request.node.module.__name__.split(".")[-1]
 
+    # Set Python version parameter
     if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "parameter"):
         allure.dynamic.parameter("python_version", label)
+
+    # Set parent suite based on test file path
     if (
         hasattr(allure, "dynamic")
         and hasattr(allure.dynamic, "parent_suite")
         and hasattr(request.node, "fspath")
     ):
         test_path = Path(str(request.node.fspath))
-        # Extract the desired grouping from the test path (unit, smoke, etc.)
-        test_category = None
+        # Extract the desired grouping from the test path for parent_suite
+        # by joining parts after 'tests' directory
         if "tests" in test_path.parts:
             tests_idx = test_path.parts.index("tests")
             if len(test_path.parts) > tests_idx + 1:
-                test_category = test_path.parts[tests_idx + 1]
-                allure.dynamic.parent_suite(f"tests.{test_category}")
+                allure.dynamic.parent_suite(".".join(test_path.parts[tests_idx:-1]))
     else:
+        # Fallback parent suite if dynamic methods are unavailable
         allure.dynamic.parent_suite("tests.misc")
+
+    # Set suite based on Python version
     if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "suite"):
         allure.dynamic.suite(label)
+
+    # Set sub-suite based on module name
     if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "sub_suite"):
         allure.dynamic.sub_suite(module_name)
 
@@ -72,7 +114,7 @@ def pytest_addoption(parser):
 
 
 @pytest.fixture(autouse=True)
-def capture_selenium_logs_on_failure(request, tmp_path):  # noqa: C901
+def capture_selenium_logs_on_failure(request: pytest.FixtureRequest, tmp_path: Path):  # noqa: C901
     """Capture and attach Selenium logs to Allure report on test failure,
     or always if configured."""
     log_patterns = ["*driver.log"]
@@ -210,10 +252,6 @@ def pytest_runtest_setup(item):
         # Find the index of 'unit' in the path
         if "unit" in parts or "smoke" in parts:
             unit_idx = parts.index("unit") if "unit" in parts else parts.index("smoke")
-
-            # item.add_marker(
-            #     allure.story("Unit Tests" if "unit" in parts else "Smoke Tests")
-            # )
 
             # The next part is the feature directory
             if len(parts) > unit_idx + 1:
