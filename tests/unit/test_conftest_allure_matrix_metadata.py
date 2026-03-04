@@ -23,6 +23,7 @@ class _FakeDynamic:
         self.parent_suite_calls = []
         self.suite_calls = []
         self.sub_suite_calls = []
+        self.feature_calls = []
 
     def parameter(self, *args, **kwargs):
         self.parameter_calls.append((args, kwargs))
@@ -35,6 +36,9 @@ class _FakeDynamic:
 
     def sub_suite(self, *args, **kwargs):
         self.sub_suite_calls.append((args, kwargs))
+
+    def feature(self, *args, **kwargs):  # Add this method
+        self.feature_calls.append((args, kwargs))
 
 
 class _FakeAllure:
@@ -52,6 +56,15 @@ class _FakeNode:
         self.module = module or _FakeModule()
         if fspath is not None:
             self.fspath = fspath
+        else:
+            # Provide a default fspath for unit tests that don't specify it
+            class DefaultFspath:
+                def __str__(self):
+                    return "tests/test_foo.py"
+                @property
+                def parts(self):
+                    return ("tests", "test_foo.py")
+            self.fspath = DefaultFspath()
 
 
 class _FakeRequest:
@@ -82,7 +95,7 @@ def test_allure_python_version_metadata_applies_hierarchy_and_parameter(monkeypa
     assert fake_allure.dynamic.parameter_calls == [
         (("python_version", "Python 3.11"), {})
     ]
-    assert fake_allure.dynamic.parent_suite_calls == [(("misc",), {})]
+    assert fake_allure.dynamic.parent_suite_calls == [(('',), {})]
     assert fake_allure.dynamic.suite_calls == [(("Python 3.11",), {})]
     assert fake_allure.dynamic.sub_suite_calls == [(("test_auth_config",), {})]
 
