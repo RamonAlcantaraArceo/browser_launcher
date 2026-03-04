@@ -138,6 +138,7 @@ jobs:
       - name: Run smoke tests with coverage
         env:
           ALLURE_PYTHON_VERSION: ${{ matrix.python-version }}
+          CI: true
         run: |
           poetry run pytest tests/smoke/ \
             -v \
