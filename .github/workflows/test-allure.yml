@@ -89,7 +89,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report-${{ matrix.python-version }}
+          name: coverage-report-unit-${{ matrix.python-version }}
           path: htmlcov/
           if-no-files-found: warn
           retention-days: 30
@@ -170,7 +170,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report-${{ matrix.python-version }}
+          name: coverage-report-smoke-${{ matrix.python-version }}
           path: htmlcov/
           if-no-files-found: warn
           retention-days: 30
