@@ -36,8 +36,22 @@ def allure_python_version_metadata(request):
 
     if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "parameter"):
         allure.dynamic.parameter("python_version", label)
-    if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "parent_suite"):
-        allure.dynamic.parent_suite("tests.unit")
+    if (
+        hasattr(allure, "dynamic")
+        and hasattr(allure.dynamic, "parent_suite")
+        and hasattr(request.node, "fspath")
+    ):
+        test_path = Path(str(request.node.fspath))
+        # Extract the desired grouping from the test path (unit, smoke, etc.)
+        test_category = None
+        if "tests" in test_path.parts:
+            tests_idx = test_path.parts.index("tests")
+            if len(test_path.parts) > tests_idx + 1:
+                test_category = test_path.parts[tests_idx + 1]
+                allure.dynamic.parent_suite(f"tests.{test_category}")
+                print(f"Set parent suite to tests.{test_category} = {test_path}")
+    else:
+        allure.dynamic.parent_suite("tests.misc")
     if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "suite"):
         allure.dynamic.suite(label)
     if hasattr(allure, "dynamic") and hasattr(allure.dynamic, "sub_suite"):

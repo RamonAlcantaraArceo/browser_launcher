@@ -43,15 +43,20 @@ class _FakeAllure:
 
 
 class _FakeModule:
-    __name__ = "tests.unit.test_auth_config"
+    def __init__(self, name="tests.unit.test_auth_config"):
+        self.__name__ = name
 
 
 class _FakeNode:
-    module = _FakeModule()
+    def __init__(self, module=None, fspath=None):
+        self.module = module or _FakeModule()
+        if fspath is not None:
+            self.fspath = fspath
 
 
 class _FakeRequest:
-    node = _FakeNode()
+    def __init__(self, node=None):
+        self.node = node or _FakeNode()
 
 
 @pytest.mark.unit
@@ -64,7 +69,10 @@ def test_allure_python_version_metadata_fixture_exists():
 def test_allure_python_version_metadata_applies_hierarchy_and_parameter(monkeypatch):
     module = importlib.import_module("conftest")
     fake_allure = _FakeAllure()
-    fake_request = _FakeRequest()
+    # Use a fresh module and node for this test
+    test_module = _FakeModule()
+    node = _FakeNode(module=test_module)
+    fake_request = _FakeRequest(node=node)
 
     monkeypatch.setenv("ALLURE_PYTHON_VERSION", "3.11")
     monkeypatch.setattr(module, "allure", fake_allure)
@@ -74,6 +82,38 @@ def test_allure_python_version_metadata_applies_hierarchy_and_parameter(monkeypa
     assert fake_allure.dynamic.parameter_calls == [
         (("python_version", "Python 3.11"), {})
     ]
-    assert fake_allure.dynamic.parent_suite_calls == [(("tests.unit",), {})]
+    assert fake_allure.dynamic.parent_suite_calls == [(("tests.misc",), {})]
     assert fake_allure.dynamic.suite_calls == [(("Python 3.11",), {})]
     assert fake_allure.dynamic.sub_suite_calls == [(("test_auth_config",), {})]
+
+
+@pytest.mark.unit
+def test_allure_python_version_metadata_smoke_path(monkeypatch):
+    module = importlib.import_module("conftest")
+    fake_allure = _FakeAllure()
+
+    # Simulate a smoke test path
+    class FakeFspath:
+        def __str__(self):
+            return "tests/smoke/test_auth_integration.py"
+
+        @property
+        def parts(self):
+            return ("tests", "smoke", "test_auth_integration.py")
+
+    # Use a fresh module and node for this test
+    test_module = _FakeModule(name="tests.smoke.test_auth_integration")
+    node = _FakeNode(module=test_module, fspath=FakeFspath())
+    fake_request = _FakeRequest(node=node)
+
+    monkeypatch.setenv("ALLURE_PYTHON_VERSION", "3.14")
+    monkeypatch.setattr(module, "allure", fake_allure)
+
+    _invoke_fixture(module, "allure_python_version_metadata", request=fake_request)
+
+    assert fake_allure.dynamic.parameter_calls == [
+        (("python_version", "Python 3.14"), {})
+    ]
+    assert fake_allure.dynamic.parent_suite_calls == [(("tests.smoke",), {})]
+    assert fake_allure.dynamic.suite_calls == [(("Python 3.14",), {})]
+    assert fake_allure.dynamic.sub_suite_calls == [(("test_auth_integration",), {})]

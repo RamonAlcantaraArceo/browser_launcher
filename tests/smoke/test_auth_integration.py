@@ -175,6 +175,7 @@ class TestFactoryAuthenticatorIntegration:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 class TestConfigAuthenticatorIntegration:
     """Auth config values flow correctly through to authenticators."""
 
