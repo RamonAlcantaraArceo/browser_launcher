@@ -41,8 +41,10 @@ class ChromeLauncher(BrowserLauncher):
 
             # Add verbose logging for CI debugging
             service = None
-            if is_ci:
-                service = Service(log_output="chromedriver.log", verbose=True)
+            if is_ci and self.config.tmp_path:
+                service = Service(
+                    log_output=str(self.config.tmp_path / "driver.log"), verbose=True
+                )
                 self.logger.debug("Enabled ChromeDriver verbose logging for CI")
 
             if self.config and self.config.locale:

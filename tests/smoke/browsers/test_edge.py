@@ -15,7 +15,7 @@ class TestEdgeBrowserName:
     """Test suite for EdgeLauncher implementation."""
 
     @pytest.fixture
-    def edge_config(self):
+    def edge_config(self, tmp_path: Path) -> BrowserConfig:
         """Create a basic Edge configuration for testing."""
         # Use headless mode in CI, allow headfull locally for debugging
         is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
@@ -24,6 +24,7 @@ class TestEdgeBrowserName:
             headless=is_ci,  # Dynamic based on environment
             user_data_dir=None,
             custom_flags=[],
+            tmp_path=tmp_path,
         )
 
     @pytest.fixture

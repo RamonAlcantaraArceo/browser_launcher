@@ -82,6 +82,11 @@ plugins: randomly-3.16.0, xdist-3.8.0, timeout-2.4.0, cov-7.0.0, allure-pytest-2
 poetry run pytest tests/unit/ -v --alluredir=allure-results
 ```
 
+### Generate matrix-aware local results
+```bash
+ALLURE_PYTHON_VERSION=3.11 poetry run pytest tests/unit/ -v --alluredir=allure-results
+```
+
 ### View Reports Interactively (requires `allure` CLI)
 ```bash
 allure serve allure-results/
@@ -138,6 +143,23 @@ allure --version
 ```bash
 poetry run pytest tests/ --alluredir=allure-results -v
 ```
+
+### "Merged matrix report only shows one run"
+**Problem:** Allure test cases from different Python jobs are merged without a distinguishing metadata parameter.
+
+**Solution:** Ensure each matrix job sets `ALLURE_PYTHON_VERSION` and that tests emit `python_version` via Allure dynamic parameters.
+
+**Expected behavior in CI:**
+- artifacts uploaded as `allure-results-<python-version>`
+- publish job downloads all with `pattern: allure-results-*`
+- merged report shows Python version metadata in suites/parameters
+
+### "Allure report generated successfully but still empty"
+**Problem:** `allure generate` can succeed even when no valid result/container files are present.
+
+**Solution:** Add pre/post checks in CI:
+- before generate: count `*-result.json` and `*-container.json` in `allure-results`
+- after generate: validate `allure-report/widgets/summary.json` has `statistic.total > 0`
 
 ### "Port 4040 already in use"
 **Problem:** Allure server already running from previous session

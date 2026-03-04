@@ -30,8 +30,10 @@ class EdgeLauncher(BrowserLauncher):
 
             # Add verbose logging for CI debugging
             service = None
-            if is_ci:
-                service = Service(log_output="edgedriver.log", verbose=True)
+            if is_ci and self.config.tmp_path:
+                service = Service(
+                    log_output=str(self.config.tmp_path / "driver.log"), verbose=True
+                )
                 self.logger.debug("Enabled EdgeDriver verbose logging for CI")
 
             if self.config and self.config.locale:
