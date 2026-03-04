@@ -61,9 +61,11 @@ class _FakeNode:
             class DefaultFspath:
                 def __str__(self):
                     return "tests/test_foo.py"
+
                 @property
                 def parts(self):
                     return ("tests", "test_foo.py")
+
             self.fspath = DefaultFspath()
 
 
@@ -95,7 +97,7 @@ def test_allure_python_version_metadata_applies_hierarchy_and_parameter(monkeypa
     assert fake_allure.dynamic.parameter_calls == [
         (("python_version", "Python 3.11"), {})
     ]
-    assert fake_allure.dynamic.parent_suite_calls == [(('',), {})]
+    assert fake_allure.dynamic.parent_suite_calls == [(("",), {})]
     assert fake_allure.dynamic.suite_calls == [(("Python 3.11",), {})]
     assert fake_allure.dynamic.sub_suite_calls == [(("test_auth_config",), {})]
 
