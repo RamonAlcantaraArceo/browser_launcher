@@ -193,16 +193,33 @@ jobs:
       - name: Setup Allure
         run: npm install -g allure-commandline
 
-      - name: Download Allure Results
+      - name: Download Allure Results (keep artifact directories separate)
         uses: actions/download-artifact@v4
         with:
           pattern: allure*-results-*
-          path: allure-results
-          merge-multiple: true
+          path: downloaded-allure
+          merge-multiple: false
+
+      - name: Discover and validate Allure result sources
+        run: |
+          mapfile -t RESULT_DIRS < <(
+            find downloaded-allure -type f -name '*-result.json' -exec dirname {} \; | sort -u
+          )
+
+          echo "Discovered result directories:"
+          printf ' - %s\n' "${RESULT_DIRS[@]}"
+
+          test "${#RESULT_DIRS[@]}" -gt 0 || (echo "No Allure result directories found" && exit 1)
+
+          smoke_count=$(find downloaded-allure -type f -path '*allure-smoke-results-*/*-result.json' | wc -l | tr -d ' ')
+          echo "Smoke result files found: $smoke_count"
+          test "$smoke_count" -gt 0 || (echo "No smoke Allure result files found" && exit 1)
 
       - name: Write Allure executor and environment metadata
         run: |
-          cat > allure-results/executor.json <<EOF
+          mkdir -p allure-meta-results
+
+          cat > allure-meta-results/executor.json <<EOF
           {
             "name": "GitHub Actions",
             "type": "github",
@@ -212,7 +229,7 @@ jobs:
           }
           EOF
 
-          cat > allure-results/environment.properties <<EOF
+          cat > allure-meta-results/environment.properties <<EOF
           Python Versions=${EXPECTED_PYTHON_VERSIONS}
           Workflow=${{ github.workflow }}
           Repository=${{ github.repository }}
@@ -224,7 +241,11 @@ jobs:
 
       - name: Generate Allure Report
         run: |
-          allure generate allure-results -o allure-report --clean
+          mapfile -t RESULT_DIRS < <(
+            find downloaded-allure -type f -name '*-result.json' -exec dirname {} \; | sort -u
+          )
+
+          allure generate allure-meta-results "${RESULT_DIRS[@]}" -o allure-report --clean
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
