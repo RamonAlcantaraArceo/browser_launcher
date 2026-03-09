@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock, PropertyMock, call, patch
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -6,9 +7,11 @@ from typer.testing import CliRunner
 from browser_launcher.browsers.base import BrowserConfig
 from browser_launcher.cli import (
     _cache_auth_result_cookies,
+    _build_domain_scoped_cookie_key,
     _normalize_cookie_domain,
     _resolve_cookie_domain,
     app,
+    cache_all_cookies_for_session,
     cache_cookies_for_session,
 )
 from browser_launcher.cookies import CookieConfig
@@ -63,6 +66,53 @@ def test_launch_success(monkeypatch, capsys):
     assert "Launching chrome at http://example.com" in result.output
     mock_bl.launch.assert_called_once_with(url="http://example.com")
     mock_bl.driver.close.assert_called()
+
+
+@pytest.mark.unit
+def test_launch_hotkey_a_caches_all_cookies(monkeypatch, capsys):
+    """Launch help text should advertise the new 'a' action."""
+    mock_config = MagicMock()
+    mock_config.get_default_browser.return_value = "chrome"
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
+    mock_config.get_default_url.return_value = "http://example.com"
+
+    mock_bl = MagicMock()
+    mock_bl.driver.session_id = "abc"
+    mock_bl.driver.close = MagicMock()
+    mock_bl.launch = MagicMock()
+
+    mock_logger = MagicMock(info=MagicMock(), error=MagicMock(), debug=MagicMock())
+    mock_stdin = MagicMock(read=MagicMock(side_effect=["x", ""]))
+
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserLauncherConfig", lambda: mock_config
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.get_available_browsers", lambda: ["chrome"]
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.create", lambda *a, **kw: mock_bl
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.get_console_logging_setting", lambda: False
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
+    )
+    monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
+    monkeypatch.setattr("sys.stdin", mock_stdin)
+
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"])
+
+    assert result.exit_code == 0
+    assert "Press 'a' to save/cache all cookies from the browser." in result.output
+    mock_bl.driver.close.assert_called_once()
 
 
 @pytest.mark.unit
@@ -1103,6 +1153,158 @@ def test_cache_cookies_for_session_duplicate_cookie_names():
         # Verify success message shows only 1 cookie
         success_call = mock_console.print.call_args_list[-1][0][0]
         assert "✅ Cached 1 cookies for" in success_call
+
+
+@pytest.mark.unit
+def test_cache_all_cookies_for_session_success_with_duplicate_names():
+    """All cookies are cached, preserving same-name cookies across domains."""
+    mock_browser_controller = MagicMock()
+    mock_browser_controller.driver.get_cookies.return_value = [
+        {"name": "session", "value": "abc", "domain": ".example.com"},
+        {"name": "session", "value": "def", "domain": "api.example.com"},
+        {"name": "theme", "value": "dark", "domain": "example.com"},
+    ]
+
+    mock_logger = MagicMock()
+    mock_console = MagicMock()
+    mock_cookie_config = MagicMock(spec=CookieConfig)
+
+    with patch("browser_launcher.cli.get_home_directory") as mock_get_home:
+        mock_get_home.return_value = Path("/fake/home")
+
+        cache_all_cookies_for_session(
+            browser_controller=mock_browser_controller,
+            user="testuser",
+            env="testenv",
+            domain="example.com",
+            cookie_config=mock_cookie_config,
+            logger=mock_logger,
+            console=mock_console,
+        )
+
+    mock_cookie_config.update_cookie_cache.assert_has_calls(
+        [
+            call(
+                "testuser",
+                "testenv",
+                "example.com",
+                _build_domain_scoped_cookie_key("session", "example.com"),
+                "abc",
+            ),
+            call(
+                "testuser",
+                "testenv",
+                "api.example.com",
+                _build_domain_scoped_cookie_key("session", "api.example.com"),
+                "def",
+            ),
+            call(
+                "testuser",
+                "testenv",
+                "example.com",
+                _build_domain_scoped_cookie_key("theme", "example.com"),
+                "dark",
+            ),
+        ],
+        any_order=True,
+    )
+    mock_cookie_config.persist_to_file.assert_called_once_with(
+        Path("/fake/home") / "config.toml"
+    )
+    success_call = mock_console.print.call_args_list[-1][0][0]
+    assert "✅ Cached 3 cookies from current browser session for testuser/testenv" in success_call
+
+
+@pytest.mark.unit
+def test_cache_all_cookies_for_session_no_cookie_config():
+    """Gracefully handles missing CookieConfig."""
+    mock_browser_controller = MagicMock()
+    mock_browser_controller.driver.get_cookies.return_value = [
+        {"name": "session", "value": "abc", "domain": "example.com"}
+    ]
+
+    mock_logger = MagicMock()
+    mock_console = MagicMock()
+
+    cache_all_cookies_for_session(
+        browser_controller=mock_browser_controller,
+        user="testuser",
+        env="testenv",
+        domain="example.com",
+        cookie_config=None,
+        logger=mock_logger,
+        console=mock_console,
+    )
+
+    mock_logger.error.assert_called_with(
+        "CookieConfig is not initialized, cannot update cache"
+    )
+    mock_console.print.assert_called_with(
+        "❌ [red]Error:[/red] CookieConfig is not initialized, cannot update cache"
+    )
+
+
+@pytest.mark.unit
+def test_cache_all_cookies_for_session_empty_browser_cookies():
+    """No-op with warning when browser has no cookies."""
+    mock_browser_controller = MagicMock()
+    mock_browser_controller.driver.get_cookies.return_value = []
+
+    mock_logger = MagicMock()
+    mock_console = MagicMock()
+    mock_cookie_config = MagicMock(spec=CookieConfig)
+
+    cache_all_cookies_for_session(
+        browser_controller=mock_browser_controller,
+        user="testuser",
+        env="testenv",
+        domain="example.com",
+        cookie_config=mock_cookie_config,
+        logger=mock_logger,
+        console=mock_console,
+    )
+
+    mock_console.print.assert_called_with("⚠️ No cookies found in current browser session")
+    mock_cookie_config.update_cookie_cache.assert_not_called()
+    mock_cookie_config.persist_to_file.assert_not_called()
+
+
+@pytest.mark.unit
+def test_cache_all_cookies_for_session_skips_invalid_cookies():
+    """Cookies missing name/domain are skipped and counted."""
+    mock_browser_controller = MagicMock()
+    mock_browser_controller.driver.get_cookies.return_value = [
+        {"name": "valid", "value": "ok", "domain": "example.com"},
+        {"name": "missing_domain", "value": "bad", "domain": ""},
+        {"name": "", "value": "bad", "domain": "example.com"},
+    ]
+
+    mock_logger = MagicMock()
+    mock_console = MagicMock()
+    mock_cookie_config = MagicMock(spec=CookieConfig)
+
+    with patch("browser_launcher.cli.get_home_directory") as mock_get_home:
+        mock_get_home.return_value = Path("/fake/home")
+
+        cache_all_cookies_for_session(
+            browser_controller=mock_browser_controller,
+            user="testuser",
+            env="testenv",
+            domain=None,
+            cookie_config=mock_cookie_config,
+            logger=mock_logger,
+            console=mock_console,
+        )
+
+    mock_cookie_config.update_cookie_cache.assert_called_once_with(
+        "testuser",
+        "testenv",
+        "example.com",
+        _build_domain_scoped_cookie_key("valid", "example.com"),
+        "ok",
+    )
+    success_call = mock_console.print.call_args_list[-1][0][0]
+    assert "(skipped 2)" in success_call
 
 
 # ---------------------------------------------------------------------------

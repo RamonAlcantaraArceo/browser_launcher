@@ -20,6 +20,7 @@ from rich.table import Table
 from selenium import webdriver
 
 logger = logging.getLogger(__name__)
+DOMAIN_SCOPED_COOKIE_SEPARATOR = "__bl_domain__"
 
 
 def config_key_to_domain(key: str) -> str:
@@ -565,14 +566,35 @@ def write_cookies_to_browser(
                 f"Driver does not have add_cookie() method: {e}"
             ) from e
         except Exception:
-            # Log or handle exceptions during individual cookie additions
-            # Continue with remaining cookies rather than failing entirely
+            # Continue with remaining cookies rather than failing entirely.
             logger.error(
                 f"Failed to inject cookie '{cookie.get('name')}' for "
                 f"domain '{poped_domain}'",
                 exc_info=True,
             )
             pass
+
+
+def _resolve_cookie_name_from_cache_key(cache_key: str, domain: Optional[str]) -> str:
+    """Resolve browser cookie name from a persisted cache key.
+
+    Cache keys may be domain-scoped (``{name}__bl_domain__{domain}``) to
+    preserve same-name cookies across domains. This helper recovers the
+    original browser cookie name while remaining backward-compatible with
+    plain keys.
+    """
+    if DOMAIN_SCOPED_COOKIE_SEPARATOR not in cache_key:
+        return cache_key
+
+    cookie_name, scoped_domain = cache_key.split(DOMAIN_SCOPED_COOKIE_SEPARATOR, 1)
+    if not cookie_name or not scoped_domain:
+        return cache_key
+
+    normalized_domain = domain.lstrip(".") if domain else None
+    if normalized_domain and scoped_domain != normalized_domain:
+        return cache_key
+
+    return cookie_name
 
 
 def get_applicable_rules(
@@ -654,7 +676,11 @@ def inject_and_verify_cookies(  # noqa: C901
 
             # Convert cache entries to cookie dicts for injection
             cookies_to_inject = [
-                {"name": name, "value": entry.value, "domain": entry.domain}
+                {
+                    "name": _resolve_cookie_name_from_cache_key(name, entry.domain),
+                    "value": entry.value,
+                    "domain": entry.domain,
+                }
                 for name, entry in valid_cache.items()
             ]
 
@@ -667,14 +693,27 @@ def inject_and_verify_cookies(  # noqa: C901
 
         # Read cookies back from the browser to verify or update cache
         browser_cookies: List[Dict[str, Any]] = []
+        valid_cache_lookup: dict[tuple[str, str], tuple[str, CacheEntry]] = {
+            (_resolve_cookie_name_from_cache_key(name, entry.domain), entry.domain): (
+                name,
+                entry,
+            )
+            for name, entry in valid_cache.items()
+        }
+
         for domain in target_domains:
             browser_cookie_list = read_cookies_from_browser(launcher.driver, domain)
             for cookie_entry in browser_cookie_list:
+                cookie_name = cookie_entry.get("name")
+                cache_lookup_key = (cookie_name, domain)
                 if not any(
                     browser_cookie["name"] == cookie_entry["name"]
+                    and browser_cookie.get("_target_domain") == domain
                     for browser_cookie in browser_cookies
-                ) and cookie_entry.get("name") in list(valid_cache.keys()):
-                    browser_cookies.append(cookie_entry)
+                ) and cache_lookup_key in valid_cache_lookup:
+                    tracked_cookie = dict(cookie_entry)
+                    tracked_cookie["_target_domain"] = domain
+                    browser_cookies.append(tracked_cookie)
 
         if browser_cookies:
             logger.info(
@@ -688,16 +727,22 @@ def inject_and_verify_cookies(  # noqa: C901
             # canonical domain stored in the config (e.g. ``apple.com``).
             for cookie in browser_cookies:
                 cookie_name = cookie["name"]
+                browser_domain = cookie.get("domain", "")
+                target_domain = cookie.get("_target_domain", browser_domain)
+                matching_cache_key, matching_entry = valid_cache_lookup.get(
+                    (cookie_name, target_domain),
+                    (cookie_name, None),
+                )
                 config_domain = (
-                    valid_cache[cookie_name].domain
-                    if cookie_name in valid_cache and valid_cache[cookie_name].domain
-                    else cookie.get("domain", "")
+                    matching_entry.domain
+                    if matching_entry is not None and matching_entry.domain
+                    else target_domain
                 )
                 cookie_config.update_cookie_cache(
                     user,
                     env,
                     config_domain,
-                    cookie_name,
+                    matching_cache_key,
                     cookie.get("value", ""),
                 )
 

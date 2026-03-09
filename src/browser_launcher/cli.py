@@ -52,6 +52,8 @@ AUTH_CONFIG_FIELD_NAMES = {
     "required_cookies",
 }
 
+DOMAIN_SCOPED_COOKIE_SEPARATOR = "__bl_domain__"
+
 
 def get_home_directory() -> Path:
     """Get the home directory path."""
@@ -298,6 +300,95 @@ def cache_cookies_for_session(
     except Exception as e:
         console.print(f"❌ Error caching cookies: {e}")
         logger.error(f"Error caching cookies: {e}", exc_info=True)
+
+
+def _build_domain_scoped_cookie_key(cookie_name: str, cookie_domain: str) -> str:
+    """Build a deterministic cookie cache key scoped by domain.
+
+    This preserves cookies that share the same browser name across different
+    domains when persisted in the flat ``[users.{user}.{env}.cookies]`` map.
+    """
+    return f"{cookie_name}{DOMAIN_SCOPED_COOKIE_SEPARATOR}{cookie_domain}"
+
+
+def cache_all_cookies_for_session(
+    browser_controller: Any,
+    user: str,
+    env: str,
+    domain: Optional[str],
+    cookie_config: Optional[CookieConfig],
+    logger: logging.Logger,
+    console: Console,
+) -> None:
+    """Cache all cookies from the active browser session.
+
+    Unlike ``cache_cookies_for_session``, this function does not filter cookies
+    by preconfigured names/domains. Every available browser cookie is persisted
+    for the selected ``user`` and ``env``.
+    """
+    try:
+        all_browser_cookies = browser_controller.driver.get_cookies()
+    except Exception as e:
+        console.print(f"❌ Error reading cookies from browser: {e}")
+        logger.error(f"Error reading cookies from browser: {e}", exc_info=True)
+        return
+
+    if not all_browser_cookies:
+        console.print("⚠️ No cookies found in current browser session")
+        logger.debug("⚠️ No cookies found in current browser session")
+        return
+
+    if cookie_config is None:
+        logger.error("CookieConfig is not initialized, cannot update cache")
+        console.print(
+            "❌ [red]Error:[/red] CookieConfig is not initialized, cannot update cache"
+        )
+        return
+
+    saved_count = 0
+    skipped_count = 0
+    fallback_domain = _normalize_cookie_domain(domain) if domain else None
+
+    for cookie in all_browser_cookies:
+        cookie_name = cookie.get("name")
+        raw_cookie_domain = cookie.get("domain")
+        cookie_domain = _normalize_cookie_domain(raw_cookie_domain) or fallback_domain
+
+        if not cookie_name or not cookie_domain:
+            skipped_count += 1
+            logger.warning(
+                f"Skipping cookie with missing name or domain: "
+                f"name={cookie_name}, domain={cookie_domain}"
+            )
+            continue
+
+        cache_key = _build_domain_scoped_cookie_key(cookie_name, cookie_domain)
+        cookie_config.update_cookie_cache(
+            user,
+            env,
+            cookie_domain,
+            cache_key,
+            cookie.get("value", ""),
+        )
+        saved_count += 1
+
+    if saved_count == 0:
+        console.print("⚠️ No valid cookies found to cache")
+        logger.debug("⚠️ No valid cookies found to cache")
+        return
+
+    config_file = get_home_directory() / "config.toml"
+    cookie_config.persist_to_file(config_file)
+
+    console.print(
+        f"✅ Cached {saved_count} cookies from current browser session "
+        f"for {user}/{env}"
+        + (f" (skipped {skipped_count})" if skipped_count else "")
+    )
+    logger.info(
+        f"Saved {saved_count} cookies for {user}/{env} "
+        f"(skipped={skipped_count})"
+    )
 
 
 def _persist_cookie_config(
@@ -918,6 +1009,7 @@ def launch(  # noqa: C901
         console.print("Press Ctrl+D or q to exit.")
         console.print("Press 'Enter' to capture a screenshot.")
         console.print("Press 's' to save/cache cookies for this session.")
+        console.print("Press 'a' to save/cache all cookies from the browser.")
         console.print("Press 'c' to dump all cookies from the browser.")
 
         # Skip interactive loop if stdin is not a usable TTY (e.g., during tests)
@@ -964,6 +1056,16 @@ def launch(  # noqa: C901
                     env,
                     domain,
                     cookie_config_data,
+                    cookie_config,
+                    logger,
+                    console,
+                )
+            elif char.lower() == "a":
+                cache_all_cookies_for_session(
+                    browser_controller,
+                    user,
+                    env,
+                    domain,
                     cookie_config,
                     logger,
                     console,
