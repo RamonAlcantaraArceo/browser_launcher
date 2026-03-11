@@ -82,6 +82,28 @@ class BrowserLauncherConfig:
             "homepage", "https://www.microsoft.com"
         )
 
+    def get_user_env_auth_path(self, user: str, env: str) -> Optional[str]:
+        """Get root-relative auth target path from ``[users.{user}.{env}.urls]``.
+
+        This value is used as a post-auth navigation path when no CLI
+        ``--target-url`` is provided.
+
+        Args:
+            user: User identifier.
+            env: Environment identifier.
+
+        Returns:
+            The configured auth path string, or ``None`` when missing/invalid.
+        """
+        user_env_urls = self._get_nested_config(["users", user, env, "urls"])
+        if not user_env_urls:
+            return None
+
+        auth_path = user_env_urls.get("auth_path")
+        if isinstance(auth_path, str) and auth_path.strip():
+            return auth_path.strip()
+        return None
+
     def get_auth_config(
         self,
         module_name: Optional[str] = None,

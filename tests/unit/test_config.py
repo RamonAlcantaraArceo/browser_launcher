@@ -41,6 +41,31 @@ def test_loads_config_and_properties(tmp_path):
 
 
 @pytest.mark.unit
+def test_get_user_env_auth_path_returns_value(tmp_path):
+    config_dict = dict(default_config)
+    config_dict["users"] = {"alice": {"prod": {"urls": {"auth_path": "/ui"}}}}
+    config_path = write_config(tmp_path, config_dict)
+    config = BrowserLauncherConfig(config_path)
+
+    assert config.get_user_env_auth_path("alice", "prod") == "/ui"
+
+
+@pytest.mark.unit
+def test_get_user_env_auth_path_missing_or_invalid_returns_none(tmp_path):
+    config_dict = dict(default_config)
+    config_dict["users"] = {
+        "alice": {"prod": {"urls": {"auth_path": ""}}},
+        "bob": {"prod": {"urls": {"auth_path": 123}}},
+    }
+    config_path = write_config(tmp_path, config_dict)
+    config = BrowserLauncherConfig(config_path)
+
+    assert config.get_user_env_auth_path("alice", "prod") is None
+    assert config.get_user_env_auth_path("bob", "prod") is None
+    assert config.get_user_env_auth_path("missing", "prod") is None
+
+
+@pytest.mark.unit
 def test_get_browser_config_returns_browserconfig(tmp_path):
     config_path = write_config(tmp_path, default_config)
     config = BrowserLauncherConfig(config_path)

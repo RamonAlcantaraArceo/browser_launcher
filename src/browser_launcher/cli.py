@@ -5,10 +5,11 @@ import logging
 import sys
 import termios
 import tty
+from enum import Enum
 from importlib import resources
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import typer
 from r3a_logger.logger import (  # type: ignore[import-untyped]
@@ -53,6 +54,13 @@ AUTH_CONFIG_FIELD_NAMES = {
 }
 
 DOMAIN_SCOPED_COOKIE_SEPARATOR = "__bl_domain__"
+
+
+class PathMode(str, Enum):
+    """Path composition mode for ``--target-url`` path values."""
+
+    ROOT = "root"
+    NESTED = "nested"
 
 
 def get_home_directory() -> Path:
@@ -192,6 +200,88 @@ def _resolve_cookie_domain(
         return _normalize_cookie_domain(browser_domain)
 
     return None
+
+
+def _is_absolute_url(value: str) -> bool:
+    """Return True when ``value`` looks like an absolute URL."""
+    parsed = urlparse(value)
+    return bool(parsed.scheme and parsed.netloc)
+
+
+def _compose_target_url(launch_url: str, target_path: str, path_mode: PathMode) -> str:
+    """Compose a target URL from launch URL and a path.
+
+    Args:
+        launch_url: The URL originally launched in the browser.
+        target_path: The target path (not an absolute URL).
+        path_mode: ``root`` or ``nested`` path resolution mode.
+
+    Returns:
+        A composed absolute URL.
+    """
+    parsed_launch = urlparse(launch_url)
+    origin = f"{parsed_launch.scheme}://{parsed_launch.netloc}"
+
+    normalized_target = target_path.lstrip("/")
+    if path_mode == PathMode.ROOT:
+        path = f"/{normalized_target}" if normalized_target else "/"
+        return f"{origin}{path}"
+
+    base_path = parsed_launch.path or "/"
+    if not base_path.endswith("/"):
+        base_path = f"{base_path}/"
+    nested_path = f"{base_path}{normalized_target}" if normalized_target else base_path
+    return urlunparse(
+        (parsed_launch.scheme, parsed_launch.netloc, nested_path, "", "", "")
+    )
+
+
+def _resolve_post_auth_target_url(
+    launch_url: str,
+    config_loader: BrowserLauncherConfig,
+    user: str,
+    env: str,
+    target_url: Optional[str],
+    path_mode: PathMode,
+    logger: logging.Logger,
+) -> Optional[str]:
+    """Resolve post-auth navigation target URL from CLI and config.
+
+    Resolution order:
+    1. CLI ``--target-url``
+    2. Config ``[users.{user}.{env}.urls].auth_path`` (root-relative only)
+    3. ``None`` (caller should refresh current page)
+    """
+    if target_url:
+        if _is_absolute_url(target_url):
+            logger.debug(f"Using absolute --target-url: {target_url}")
+            return target_url
+        resolved = _compose_target_url(launch_url, target_url, path_mode)
+        logger.debug(
+            f"Resolved --target-url path '{target_url}' using mode "
+            f"'{path_mode.value}' -> {resolved}"
+        )
+        return resolved
+
+    config_auth_path = config_loader.get_user_env_auth_path(user=user, env=env)
+    if config_auth_path is None:
+        logger.debug(
+            "No --target-url or config auth_path configured; will refresh current page"
+        )
+        return None
+
+    if not config_auth_path.startswith("/"):
+        logger.warning(
+            f"Invalid config auth_path '{config_auth_path}' for {user}/{env}; "
+            "auth_path must start with '/'. Falling back to page refresh."
+        )
+        return None
+
+    resolved = _compose_target_url(launch_url, config_auth_path, PathMode.ROOT)
+    logger.debug(
+        f"Resolved config auth_path '{config_auth_path}' for {user}/{env} -> {resolved}"
+    )
+    return resolved
 
 
 def cache_cookies_for_session(
@@ -803,6 +893,22 @@ def init(
 @app.command()
 def launch(  # noqa: C901
     url: Optional[str] = typer.Argument(None, help="URL to open"),
+    target_url: Optional[str] = typer.Option(
+        None,
+        "--target-url",
+        help=(
+            "Post-auth navigation target. Accepts full URL or path. "
+            "If omitted, uses user/env config auth_path or refreshes current page."
+        ),
+    ),
+    path_mode: PathMode = typer.Option(
+        PathMode.ROOT,
+        "--path-mode",
+        help=(
+            "Path resolution mode for --target-url path values: "
+            "'root' (default) or 'nested'."
+        ),
+    ),
     browser: Optional[str] = typer.Option(None, "--browser", help="Browser to use"),
     headless: bool = typer.Option(
         False, "--headless", help="Run browser in headless mode"
@@ -866,6 +972,8 @@ def launch(  # noqa: C901
         "launch",
         {
             "url": url,
+            "target_url": target_url,
+            "path_mode": path_mode.value,
             "browser": browser,
             "headless": headless,
             "user": user,
@@ -971,12 +1079,25 @@ def launch(  # noqa: C901
                 f"{[cookie['name'] for cookie in injected_cookies]}"
             )
 
-            if url:
-                # TODO: improve config on this so that there is a 2 url pattern
-                # 1 that matches domain for cookie injection
-                # another that is the actual launch url
-                # they could be same or different
-                browser_controller.safe_get_address(url + "/ui")
+            resolved_target_url = _resolve_post_auth_target_url(
+                launch_url=launch_url,
+                config_loader=config_loader,
+                user=user,
+                env=env,
+                target_url=target_url,
+                path_mode=path_mode,
+                logger=logger,
+            )
+            if resolved_target_url:
+                logger.info(
+                    f"Navigating to post-auth target URL: {resolved_target_url}"
+                )
+                browser_controller.safe_get_address(resolved_target_url)
+            else:
+                logger.info(
+                    "No post-auth target URL provided; refreshing current page instead"
+                )
+                browser_controller.driver.refresh()
 
     except Exception as e:
         logger.warning(

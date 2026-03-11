@@ -1,13 +1,14 @@
-from unittest.mock import MagicMock, PropertyMock, call, patch
 from pathlib import Path
+from unittest.mock import MagicMock, PropertyMock, call, patch
 
 import pytest
 from typer.testing import CliRunner
 
 from browser_launcher.browsers.base import BrowserConfig
 from browser_launcher.cli import (
-    _cache_auth_result_cookies,
+    PathMode,
     _build_domain_scoped_cookie_key,
+    _cache_auth_result_cookies,
     _normalize_cookie_domain,
     _resolve_cookie_domain,
     app,
@@ -245,10 +246,13 @@ def test_launch_with_verbose_and_debug(monkeypatch, capsys):
     assert result.exit_code == 0
     mock_bl.launch.assert_called_once()
     mock_bl.driver.close.assert_called()
-    # Accept the actual log message format
-    mock_logger.info.assert_any_call(
-        "Starting browser launch - [launch] headless=False | user=default | "
-        "env=prod | verbose=True | debug=True"
+    # Validate key fields are present in launch context log.
+    assert any(
+        "Starting browser launch - [launch]" in str(call_info)
+        and "verbose=True" in str(call_info)
+        and "debug=True" in str(call_info)
+        and "path_mode=root" in str(call_info)
+        for call_info in mock_logger.info.call_args_list
     )
 
 
@@ -735,6 +739,350 @@ def test_launch_with_default_locale(monkeypatch, capsys):
     mock_bl.driver.close.assert_called()
 
 
+@pytest.mark.unit
+def test_launch_refreshes_when_no_target_url_or_config(monkeypatch, capsys):
+    mock_config = MagicMock()
+    mock_config.get_default_browser.return_value = "chrome"
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
+    mock_config.get_default_url.return_value = "http://example.com/base"
+    mock_config.get_user_env_auth_path.return_value = None
+
+    mock_bl = MagicMock()
+    mock_bl.driver.session_id = "abc"
+    mock_bl.driver.close = MagicMock()
+    mock_bl.driver.refresh = MagicMock()
+    mock_bl.safe_get_address = MagicMock()
+    mock_bl.launch = MagicMock()
+
+    mock_logger = MagicMock(info=MagicMock(), error=MagicMock(), warning=MagicMock())
+
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserLauncherConfig", lambda: mock_config
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.get_available_browsers", lambda: ["chrome"]
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.create", lambda *a, **kw: mock_bl
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.get_console_logging_setting", lambda: False
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
+    )
+    monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
+    monkeypatch.setattr(
+        "browser_launcher.cli.attempt_authentication",
+        lambda **kwargs: [{"name": "session", "value": "ok"}],
+    )
+    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
+
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"])
+
+    assert result.exit_code == 0
+    mock_bl.driver.refresh.assert_called_once()
+    mock_bl.safe_get_address.assert_not_called()
+
+
+@pytest.mark.unit
+def test_launch_uses_target_url_path_with_root_mode(monkeypatch, capsys):
+    mock_config = MagicMock()
+    mock_config.get_default_browser.return_value = "chrome"
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
+    mock_config.get_user_env_auth_path.return_value = None
+
+    mock_bl = MagicMock()
+    mock_bl.driver.session_id = "abc"
+    mock_bl.driver.close = MagicMock()
+    mock_bl.driver.refresh = MagicMock()
+    mock_bl.safe_get_address = MagicMock()
+    mock_bl.launch = MagicMock()
+
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserLauncherConfig", lambda: mock_config
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.get_available_browsers", lambda: ["chrome"]
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.create", lambda *a, **kw: mock_bl
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.get_console_logging_setting", lambda: False
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.get_current_logger",
+        lambda: MagicMock(info=MagicMock(), error=MagicMock(), warning=MagicMock()),
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.attempt_authentication",
+        lambda **kwargs: [{"name": "session", "value": "ok"}],
+    )
+    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
+
+    with capsys.disabled():
+        result = runner.invoke(
+            app,
+            [
+                "launch",
+                "http://example.com/base/path",
+                "--target-url",
+                "ui",
+                "--path-mode",
+                PathMode.ROOT.value,
+            ],
+        )
+
+    assert result.exit_code == 0
+    mock_bl.safe_get_address.assert_called_once_with("http://example.com/ui")
+    mock_bl.driver.refresh.assert_not_called()
+
+
+@pytest.mark.unit
+def test_launch_uses_target_url_path_with_nested_mode(monkeypatch, capsys):
+    mock_config = MagicMock()
+    mock_config.get_default_browser.return_value = "chrome"
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
+    mock_config.get_user_env_auth_path.return_value = None
+
+    mock_bl = MagicMock()
+    mock_bl.driver.session_id = "abc"
+    mock_bl.driver.close = MagicMock()
+    mock_bl.driver.refresh = MagicMock()
+    mock_bl.safe_get_address = MagicMock()
+    mock_bl.launch = MagicMock()
+
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserLauncherConfig", lambda: mock_config
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.get_available_browsers", lambda: ["chrome"]
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.create", lambda *a, **kw: mock_bl
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.get_console_logging_setting", lambda: False
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.get_current_logger",
+        lambda: MagicMock(info=MagicMock(), error=MagicMock(), warning=MagicMock()),
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.attempt_authentication",
+        lambda **kwargs: [{"name": "session", "value": "ok"}],
+    )
+    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
+
+    with capsys.disabled():
+        result = runner.invoke(
+            app,
+            [
+                "launch",
+                "http://example.com/base/path",
+                "--target-url",
+                "ui",
+                "--path-mode",
+                PathMode.NESTED.value,
+            ],
+        )
+
+    assert result.exit_code == 0
+    mock_bl.safe_get_address.assert_called_once_with("http://example.com/base/path/ui")
+    mock_bl.driver.refresh.assert_not_called()
+
+
+@pytest.mark.unit
+def test_launch_uses_absolute_target_url_directly(monkeypatch, capsys):
+    mock_config = MagicMock()
+    mock_config.get_default_browser.return_value = "chrome"
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
+    mock_config.get_user_env_auth_path.return_value = None
+
+    mock_bl = MagicMock()
+    mock_bl.driver.session_id = "abc"
+    mock_bl.driver.close = MagicMock()
+    mock_bl.driver.refresh = MagicMock()
+    mock_bl.safe_get_address = MagicMock()
+    mock_bl.launch = MagicMock()
+
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserLauncherConfig", lambda: mock_config
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.get_available_browsers", lambda: ["chrome"]
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.create", lambda *a, **kw: mock_bl
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.get_console_logging_setting", lambda: False
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.get_current_logger",
+        lambda: MagicMock(info=MagicMock(), error=MagicMock(), warning=MagicMock()),
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.attempt_authentication",
+        lambda **kwargs: [{"name": "session", "value": "ok"}],
+    )
+    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
+
+    with capsys.disabled():
+        result = runner.invoke(
+            app,
+            [
+                "launch",
+                "http://example.com/base/path",
+                "--target-url",
+                "https://auth.example.com/ui",
+                "--path-mode",
+                PathMode.NESTED.value,
+            ],
+        )
+
+    assert result.exit_code == 0
+    mock_bl.safe_get_address.assert_called_once_with("https://auth.example.com/ui")
+    mock_bl.driver.refresh.assert_not_called()
+
+
+@pytest.mark.unit
+def test_launch_uses_config_auth_path_when_target_url_absent(monkeypatch, capsys):
+    mock_config = MagicMock()
+    mock_config.get_default_browser.return_value = "chrome"
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
+    mock_config.get_default_url.return_value = "http://example.com/base/path"
+    mock_config.get_user_env_auth_path.return_value = "/configured"
+
+    mock_bl = MagicMock()
+    mock_bl.driver.session_id = "abc"
+    mock_bl.driver.close = MagicMock()
+    mock_bl.driver.refresh = MagicMock()
+    mock_bl.safe_get_address = MagicMock()
+    mock_bl.launch = MagicMock()
+
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserLauncherConfig", lambda: mock_config
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.get_available_browsers", lambda: ["chrome"]
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.create", lambda *a, **kw: mock_bl
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.get_console_logging_setting", lambda: False
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.get_current_logger",
+        lambda: MagicMock(info=MagicMock(), error=MagicMock(), warning=MagicMock()),
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.attempt_authentication",
+        lambda **kwargs: [{"name": "session", "value": "ok"}],
+    )
+    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
+
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"])
+
+    assert result.exit_code == 0
+    mock_bl.safe_get_address.assert_called_once_with("http://example.com/configured")
+    mock_bl.driver.refresh.assert_not_called()
+
+
+@pytest.mark.unit
+def test_launch_refreshes_on_invalid_config_auth_path(monkeypatch, capsys):
+    mock_config = MagicMock()
+    mock_config.get_default_browser.return_value = "chrome"
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
+    mock_config.get_default_url.return_value = "http://example.com/base/path"
+    mock_config.get_user_env_auth_path.return_value = "configured"  # invalid
+
+    mock_bl = MagicMock()
+    mock_bl.driver.session_id = "abc"
+    mock_bl.driver.close = MagicMock()
+    mock_bl.driver.refresh = MagicMock()
+    mock_bl.safe_get_address = MagicMock()
+    mock_bl.launch = MagicMock()
+
+    mock_logger = MagicMock(info=MagicMock(), error=MagicMock(), warning=MagicMock())
+
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserLauncherConfig", lambda: mock_config
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.get_available_browsers", lambda: ["chrome"]
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.create", lambda *a, **kw: mock_bl
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.get_console_logging_setting", lambda: False
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
+    )
+    monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
+    monkeypatch.setattr(
+        "browser_launcher.cli.attempt_authentication",
+        lambda **kwargs: [{"name": "session", "value": "ok"}],
+    )
+    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
+
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"])
+
+    assert result.exit_code == 0
+    mock_bl.driver.refresh.assert_called_once()
+    mock_bl.safe_get_address.assert_not_called()
+    assert mock_logger.warning.called
+
+
 # Tests for cache_cookies_for_session function
 
 
@@ -1212,7 +1560,10 @@ def test_cache_all_cookies_for_session_success_with_duplicate_names():
         Path("/fake/home") / "config.toml"
     )
     success_call = mock_console.print.call_args_list[-1][0][0]
-    assert "✅ Cached 3 cookies from current browser session for testuser/testenv" in success_call
+    assert (
+        "✅ Cached 3 cookies from current browser session for testuser/testenv"
+        in success_call
+    )
 
 
 @pytest.mark.unit
@@ -1264,7 +1615,9 @@ def test_cache_all_cookies_for_session_empty_browser_cookies():
         console=mock_console,
     )
 
-    mock_console.print.assert_called_with("⚠️ No cookies found in current browser session")
+    mock_console.print.assert_called_with(
+        "⚠️ No cookies found in current browser session"
+    )
     mock_cookie_config.update_cookie_cache.assert_not_called()
     mock_cookie_config.persist_to_file.assert_not_called()
 
