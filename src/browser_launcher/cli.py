@@ -2,6 +2,7 @@
 
 import json
 import logging
+import subprocess
 import sys
 import termios
 import tty
@@ -54,6 +55,16 @@ AUTH_CONFIG_FIELD_NAMES = {
 }
 
 DOMAIN_SCOPED_COOKIE_SEPARATOR = "__bl_domain__"
+PLAYWRIGHT_COOKIE_FIELDS = (
+    "name",
+    "value",
+    "domain",
+    "path",
+    "httpOnly",
+    "secure",
+    "sameSite",
+    "expiry",
+)
 
 
 class PathMode(str, Enum):
@@ -399,6 +410,83 @@ def _build_domain_scoped_cookie_key(cookie_name: str, cookie_domain: str) -> str
     domains when persisted in the flat ``[users.{user}.{env}.cookies]`` map.
     """
     return f"{cookie_name}{DOMAIN_SCOPED_COOKIE_SEPARATOR}{cookie_domain}"
+
+
+def _build_playwright_cookie_export_script(cookies: list[dict[str, Any]]) -> str:
+    """Build a Playwright JavaScript snippet that re-injects browser cookies."""
+    sorted_cookies = sorted(
+        cookies,
+        key=lambda cookie: (
+            str(cookie.get("name", "")),
+            str(cookie.get("domain", "")),
+            str(cookie.get("path", "")),
+        ),
+    )
+
+    cookie_blocks: list[str] = []
+    for cookie in sorted_cookies:
+        lines = ["    {"]
+        for field in PLAYWRIGHT_COOKIE_FIELDS:
+            value = cookie.get(field)
+            if value is None:
+                continue
+            lines.append(f"      {field}: {json.dumps(value)},")
+        lines.append("    }")
+        cookie_blocks.append("\n".join(lines))
+
+    cookies_section = ",\n".join(cookie_blocks)
+    if cookies_section:
+        cookies_section = f"\n{cookies_section}\n"
+
+    return (
+        "async (page) => {\n"
+        "  await page.context().addCookies(["
+        f"{cookies_section}"
+        "  ]);\n"
+        "  await page.reload();\n"
+        "}"
+    )
+
+
+def _copy_text_to_clipboard_macos(text: str) -> None:
+    """Copy text to macOS clipboard using pbcopy."""
+    subprocess.run(["pbcopy"], input=text, text=True, check=True)
+
+
+def export_all_cookies_to_clipboard(
+    driver: Any,
+    logger: logging.Logger,
+    console: Console,
+) -> None:
+    """Export all current browser cookies as Playwright JavaScript to clipboard."""
+    try:
+        all_browser_cookies = driver.get_cookies()
+    except Exception as e:
+        console.print(f"❌ Error reading cookies from browser: {e}")
+        logger.error(f"Error reading cookies from browser: {e}", exc_info=True)
+        return
+
+    if not all_browser_cookies:
+        console.print("⚠️ No cookies found in current browser session")
+        logger.debug("⚠️ No cookies found in current browser session")
+        return
+
+    script = _build_playwright_cookie_export_script(all_browser_cookies)
+    try:
+        _copy_text_to_clipboard_macos(script)
+    except Exception as e:
+        console.print(f"❌ Error copying cookie export to clipboard: {e}")
+        logger.error(f"Error copying cookie export to clipboard: {e}", exc_info=True)
+        return
+
+    console.print(
+        f"✅ Copied Playwright cookie export script with "
+        f"{len(all_browser_cookies)} cookies to clipboard"
+    )
+    logger.info(
+        f"Copied Playwright cookie export script with "
+        f"{len(all_browser_cookies)} cookies"
+    )
 
 
 def cache_all_cookies_for_session(
@@ -1132,6 +1220,7 @@ def launch(  # noqa: C901
         console.print("Press 's' to save/cache cookies for this session.")
         console.print("Press 'a' to save/cache all cookies from the browser.")
         console.print("Press 'c' to dump all cookies from the browser.")
+        console.print("Press 'e' to copy cookies as Playwright JS to clipboard.")
 
         # Skip interactive loop if stdin is not a usable TTY (e.g., during tests)
 
@@ -1193,6 +1282,19 @@ def launch(  # noqa: C901
                 )
             elif char.lower() == "c":
                 _dump_cookies_from_browser(browser_controller.driver, logger, console)
+            elif char.lower() == "e":
+                try:
+                    export_all_cookies_to_clipboard(
+                        browser_controller.driver,
+                        logger,
+                        console,
+                    )
+                except Exception as e:
+                    console.print(f"❌ Error exporting cookies to clipboard: {e}")
+                    logger.error(
+                        f"Error exporting cookies to clipboard: {e}",
+                        exc_info=True,
+                    )
 
     except EOFError:
         console.print("\nExiting...")

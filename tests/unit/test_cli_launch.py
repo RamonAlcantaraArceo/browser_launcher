@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import MagicMock, PropertyMock, call, patch
+from unittest.mock import ANY, MagicMock, PropertyMock, call, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -14,6 +14,7 @@ from browser_launcher.cli import (
     app,
     cache_all_cookies_for_session,
     cache_cookies_for_session,
+    export_all_cookies_to_clipboard,
 )
 from browser_launcher.cookies import CookieConfig
 
@@ -113,6 +114,108 @@ def test_launch_hotkey_a_caches_all_cookies(monkeypatch, capsys):
 
     assert result.exit_code == 0
     assert "Press 'a' to save/cache all cookies from the browser." in result.output
+    assert "Press 'e' to copy cookies as Playwright JS to clipboard." in result.output
+    mock_bl.driver.close.assert_called_once()
+
+
+@pytest.mark.unit
+def test_launch_hotkey_e_exports_cookies_to_clipboard(monkeypatch, capsys):
+    mock_config = MagicMock()
+    mock_config.get_default_browser.return_value = "chrome"
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
+    mock_config.get_default_url.return_value = "http://example.com"
+
+    mock_bl = MagicMock()
+    mock_bl.driver.session_id = "abc"
+    mock_bl.driver.close = MagicMock()
+    mock_bl.launch = MagicMock()
+
+    mock_logger = MagicMock(info=MagicMock(), error=MagicMock(), debug=MagicMock())
+    mock_stdin = MagicMock(read=MagicMock(side_effect=["e", "q"]))
+    mock_export = MagicMock(spec=export_all_cookies_to_clipboard)
+
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserLauncherConfig", lambda: mock_config
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.get_available_browsers", lambda: ["chrome"]
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.create", lambda *a, **kw: mock_bl
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.get_console_logging_setting", lambda: False
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
+    )
+    monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
+    monkeypatch.setattr(
+        "browser_launcher.cli.export_all_cookies_to_clipboard",
+        mock_export,
+    )
+    monkeypatch.setattr("sys.stdin", mock_stdin)
+
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"])
+
+    assert result.exit_code == 0
+    mock_export.assert_called_once_with(mock_bl.driver, mock_logger, ANY)
+    mock_bl.driver.close.assert_called_once()
+
+
+@pytest.mark.unit
+def test_launch_hotkey_e_export_error_is_handled(monkeypatch, capsys):
+    mock_config = MagicMock()
+    mock_config.get_default_browser.return_value = "chrome"
+    mock_config.get_browser_config.return_value = BrowserConfig(
+        binary_path=None,
+        headless=False,
+        user_data_dir=None,
+        custom_flags=None,
+    )
+    mock_config.get_default_url.return_value = "http://example.com"
+
+    mock_bl = MagicMock()
+    mock_bl.driver.session_id = "abc"
+    mock_bl.driver.close = MagicMock()
+    mock_bl.launch = MagicMock()
+
+    mock_logger = MagicMock(info=MagicMock(), error=MagicMock(), debug=MagicMock())
+    mock_stdin = MagicMock(read=MagicMock(side_effect=["e", "q"]))
+
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserLauncherConfig", lambda: mock_config
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.get_available_browsers", lambda: ["chrome"]
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.BrowserFactory.create", lambda *a, **kw: mock_bl
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.get_console_logging_setting", lambda: False
+    )
+    monkeypatch.setattr(
+        "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
+    )
+    monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
+    monkeypatch.setattr(
+        "browser_launcher.cli.export_all_cookies_to_clipboard",
+        MagicMock(side_effect=RuntimeError("boom")),
+    )
+    monkeypatch.setattr("sys.stdin", mock_stdin)
+
+    with capsys.disabled():
+        result = runner.invoke(app, ["launch"])
+
+    assert result.exit_code == 0
+    assert "Error exporting cookies to clipboard: boom" in result.output
     mock_bl.driver.close.assert_called_once()
 
 
