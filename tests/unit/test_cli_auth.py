@@ -238,9 +238,8 @@ def test_launch_calls_attempt_authentication_hook(monkeypatch):
     monkeypatch.setattr(
         "browser_launcher.cli.attempt_authentication", mock_attempt_authentication
     )
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
-    result = runner.invoke(app, ["launch"])
+    result = runner.invoke(app, ["launch"], input="q")
 
     assert result.exit_code == 0
     mock_attempt_authentication.assert_called_once()

@@ -706,11 +706,14 @@ def inject_and_verify_cookies(  # noqa: C901
             for cookie_entry in browser_cookie_list:
                 cookie_name = cookie_entry.get("name")
                 cache_lookup_key = (cookie_name, domain)
-                if not any(
-                    browser_cookie["name"] == cookie_entry["name"]
-                    and browser_cookie.get("_target_domain") == domain
-                    for browser_cookie in browser_cookies
-                ) and cache_lookup_key in valid_cache_lookup:
+                if (
+                    not any(
+                        browser_cookie["name"] == cookie_entry["name"]
+                        and browser_cookie.get("_target_domain") == domain
+                        for browser_cookie in browser_cookies
+                    )
+                    and cache_lookup_key in valid_cache_lookup
+                ):
                     tracked_cookie = dict(cookie_entry)
                     tracked_cookie["_target_domain"] = domain
                     browser_cookies.append(tracked_cookie)

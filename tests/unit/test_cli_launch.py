@@ -60,7 +60,6 @@ def test_launch_success(monkeypatch, capsys):
         "browser_launcher.cli.get_current_logger",
         lambda: MagicMock(info=MagicMock(), error=MagicMock()),
     )
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     with capsys.disabled():
         result = runner.invoke(app, ["launch"])
@@ -89,7 +88,6 @@ def test_launch_hotkey_a_caches_all_cookies(monkeypatch, capsys):
     mock_bl.launch = MagicMock()
 
     mock_logger = MagicMock(info=MagicMock(), error=MagicMock(), debug=MagicMock())
-    mock_stdin = MagicMock(read=MagicMock(side_effect=["x", ""]))
 
     monkeypatch.setattr(
         "browser_launcher.cli.BrowserLauncherConfig", lambda: mock_config
@@ -107,10 +105,9 @@ def test_launch_hotkey_a_caches_all_cookies(monkeypatch, capsys):
         "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
     )
     monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
-    monkeypatch.setattr("sys.stdin", mock_stdin)
 
     with capsys.disabled():
-        result = runner.invoke(app, ["launch"])
+        result = runner.invoke(app, ["launch"], input="q")
 
     assert result.exit_code == 0
     assert "Press 'a' to save/cache all cookies from the browser." in result.output
@@ -136,7 +133,6 @@ def test_launch_hotkey_e_exports_cookies_to_clipboard(monkeypatch, capsys):
     mock_bl.launch = MagicMock()
 
     mock_logger = MagicMock(info=MagicMock(), error=MagicMock(), debug=MagicMock())
-    mock_stdin = MagicMock(read=MagicMock(side_effect=["e", "q"]))
     mock_export = MagicMock(spec=export_all_cookies_to_clipboard)
 
     monkeypatch.setattr(
@@ -159,10 +155,9 @@ def test_launch_hotkey_e_exports_cookies_to_clipboard(monkeypatch, capsys):
         "browser_launcher.cli.export_all_cookies_to_clipboard",
         mock_export,
     )
-    monkeypatch.setattr("sys.stdin", mock_stdin)
 
     with capsys.disabled():
-        result = runner.invoke(app, ["launch"])
+        result = runner.invoke(app, ["launch"], input="eq")
 
     assert result.exit_code == 0
     mock_export.assert_called_once_with(mock_bl.driver, mock_logger, ANY)
@@ -187,7 +182,6 @@ def test_launch_hotkey_e_export_error_is_handled(monkeypatch, capsys):
     mock_bl.launch = MagicMock()
 
     mock_logger = MagicMock(info=MagicMock(), error=MagicMock(), debug=MagicMock())
-    mock_stdin = MagicMock(read=MagicMock(side_effect=["e", "q"]))
 
     monkeypatch.setattr(
         "browser_launcher.cli.BrowserLauncherConfig", lambda: mock_config
@@ -209,10 +203,9 @@ def test_launch_hotkey_e_export_error_is_handled(monkeypatch, capsys):
         "browser_launcher.cli.export_all_cookies_to_clipboard",
         MagicMock(side_effect=RuntimeError("boom")),
     )
-    monkeypatch.setattr("sys.stdin", mock_stdin)
 
     with capsys.disabled():
-        result = runner.invoke(app, ["launch"])
+        result = runner.invoke(app, ["launch"], input="eq")
 
     assert result.exit_code == 0
     assert "Error exporting cookies to clipboard: boom" in result.output
@@ -254,11 +247,10 @@ def test_launch_with_url_and_browser(monkeypatch, capsys):
         "browser_launcher.cli.get_current_logger",
         lambda: MagicMock(info=MagicMock(), error=MagicMock()),
     )
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     with capsys.disabled():
         result = runner.invoke(
-            app, ["launch", "http://custom.com", "--browser", "firefox"]
+            app, ["launch", "http://custom.com", "--browser", "firefox"], input="q"
         )
     assert result.exit_code == 0
     assert "Launching firefox at http://custom.com" in result.output
@@ -300,7 +292,6 @@ def test_launch_with_headless(monkeypatch, capsys):
         "browser_launcher.cli.get_current_logger",
         lambda: MagicMock(info=MagicMock(), error=MagicMock()),
     )
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     with capsys.disabled():
         result = runner.invoke(app, ["launch", "--headless"])
@@ -342,7 +333,6 @@ def test_launch_with_verbose_and_debug(monkeypatch, capsys):
         "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
     )
     monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     with capsys.disabled():
         result = runner.invoke(app, ["launch", "--verbose", "--debug"])
@@ -373,7 +363,6 @@ def test_launch_config_file_not_found(monkeypatch):
         "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
     )
     monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     result = runner.invoke(app, ["launch"])
     assert result.exit_code != 0
@@ -402,7 +391,6 @@ def test_launch_unsupported_browser(monkeypatch):
         "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
     )
     monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     result = runner.invoke(app, ["launch"])
     assert result.exit_code != 0
@@ -430,7 +418,6 @@ def test_launch_browser_config_load_failure(monkeypatch):
         "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
     )
     monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     result = runner.invoke(app, ["launch"])
     assert result.exit_code != 0
@@ -467,7 +454,6 @@ def test_launch_browser_instantiation_failure(monkeypatch):
         "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
     )
     monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     result = runner.invoke(app, ["launch"])
     assert result.exit_code != 0
@@ -507,7 +493,6 @@ def test_launch_browser_launch_failure(monkeypatch):
         "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
     )
     monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     result = runner.invoke(app, ["launch"])
     assert result.exit_code != 0
@@ -553,7 +538,6 @@ def test_launch_session_gone_bad(monkeypatch, capsys):
         lambda: MagicMock(info=MagicMock(), error=MagicMock()),
     )
     # Simulate one loop with session_id None, then exit
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     # Disable capsys to prevent capture conflicts with CliRunner
     with capsys.disabled():
@@ -646,7 +630,6 @@ def test_launch_driver_close_exception(monkeypatch, capsys):
         "browser_launcher.cli.get_current_logger",
         lambda: MagicMock(info=MagicMock(), error=MagicMock()),
     )
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     with capsys.disabled():
         result = runner.invoke(app, ["launch"])
@@ -772,7 +755,6 @@ def test_launch_with_locale(monkeypatch, capsys):
         "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
     )
     monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     # Test with custom locale
     with capsys.disabled():
@@ -826,7 +808,6 @@ def test_launch_with_default_locale(monkeypatch, capsys):
         "browser_launcher.cli.initialize_logging", lambda *a, **kw: None
     )
     monkeypatch.setattr("browser_launcher.cli.get_current_logger", lambda: mock_logger)
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     # Test without locale parameter (should use default "en-US")
     with capsys.disabled():
@@ -884,7 +865,6 @@ def test_launch_refreshes_when_no_target_url_or_config(monkeypatch, capsys):
         "browser_launcher.cli.attempt_authentication",
         lambda **kwargs: [{"name": "session", "value": "ok"}],
     )
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     with capsys.disabled():
         result = runner.invoke(app, ["launch"])
@@ -936,7 +916,6 @@ def test_launch_uses_target_url_path_with_root_mode(monkeypatch, capsys):
         "browser_launcher.cli.attempt_authentication",
         lambda **kwargs: [{"name": "session", "value": "ok"}],
     )
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     with capsys.disabled():
         result = runner.invoke(
@@ -998,7 +977,6 @@ def test_launch_uses_target_url_path_with_nested_mode(monkeypatch, capsys):
         "browser_launcher.cli.attempt_authentication",
         lambda **kwargs: [{"name": "session", "value": "ok"}],
     )
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     with capsys.disabled():
         result = runner.invoke(
@@ -1060,7 +1038,6 @@ def test_launch_uses_absolute_target_url_directly(monkeypatch, capsys):
         "browser_launcher.cli.attempt_authentication",
         lambda **kwargs: [{"name": "session", "value": "ok"}],
     )
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     with capsys.disabled():
         result = runner.invoke(
@@ -1123,7 +1100,6 @@ def test_launch_uses_config_auth_path_when_target_url_absent(monkeypatch, capsys
         "browser_launcher.cli.attempt_authentication",
         lambda **kwargs: [{"name": "session", "value": "ok"}],
     )
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     with capsys.disabled():
         result = runner.invoke(app, ["launch"])
@@ -1175,7 +1151,6 @@ def test_launch_refreshes_on_invalid_config_auth_path(monkeypatch, capsys):
         "browser_launcher.cli.attempt_authentication",
         lambda **kwargs: [{"name": "session", "value": "ok"}],
     )
-    monkeypatch.setattr("sys.stdin", MagicMock(read=MagicMock(side_effect=["x", ""])))
 
     with capsys.disabled():
         result = runner.invoke(app, ["launch"])

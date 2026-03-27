@@ -1,5 +1,6 @@
 """Unit tests for clipboard cookie export helpers in cli.py."""
 
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,7 +13,9 @@ from browser_launcher.cli import (
 
 
 @pytest.mark.unit
-def test_build_playwright_cookie_export_script_deterministic_and_optional_fields():
+def test_build_playwright_cookie_export_script_deterministic_and_optional_fields() -> (
+    None
+):
     cookies = [
         {
             "name": "z_cookie",
@@ -26,7 +29,7 @@ def test_build_playwright_cookie_export_script_deterministic_and_optional_fields
         },
         {
             "name": "a_cookie",
-            "value": "a\"quote",
+            "value": 'a"quote',
             "domain": "www.deptagency.com",
             "path": "/foo",
             "secure": False,
@@ -39,20 +42,20 @@ def test_build_playwright_cookie_export_script_deterministic_and_optional_fields
     assert "await page.context().addCookies([" in script
     assert "await page.reload();" in script
     # Sorted by cookie name to keep output deterministic
-    assert script.find("name: \"a_cookie\"") < script.find("name: \"z_cookie\"")
+    assert script.find('name: "a_cookie"') < script.find('name: "z_cookie"')
     # Optional fields omitted when missing
     assert "sameSite" in script
     assert "expiry" in script
-    assert "path: \"/foo\"" in script
+    assert 'path: "/foo"' in script
     # Verify quote escaping in values
     assert 'value: "a\\"quote"' in script
 
 
 @pytest.mark.unit
-def test_copy_text_to_clipboard_macos_calls_pbcopy(monkeypatch):
-    called = {}
+def test_copy_text_to_clipboard_macos_calls_pbcopy(monkeypatch: Any) -> None:
+    called: dict[str, Any] = {}
 
-    def _mock_run(*args, **kwargs):
+    def _mock_run(*args: Any, **kwargs: Any) -> None:
         called["args"] = args
         called["kwargs"] = kwargs
 
@@ -67,7 +70,7 @@ def test_copy_text_to_clipboard_macos_calls_pbcopy(monkeypatch):
 
 
 @pytest.mark.unit
-def test_export_all_cookies_to_clipboard_success(monkeypatch):
+def test_export_all_cookies_to_clipboard_success(monkeypatch: Any) -> None:
     driver = MagicMock()
     driver.get_cookies.return_value = [
         {
@@ -82,9 +85,9 @@ def test_export_all_cookies_to_clipboard_success(monkeypatch):
     logger = MagicMock()
     console = MagicMock()
 
-    copied = {"text": None}
+    copied: dict[str, Any] = {"text": None}
 
-    def _mock_copy(text):
+    def _mock_copy(text: str) -> None:
         copied["text"] = text
 
     monkeypatch.setattr(
@@ -102,7 +105,7 @@ def test_export_all_cookies_to_clipboard_success(monkeypatch):
 
 
 @pytest.mark.unit
-def test_export_all_cookies_to_clipboard_no_cookies(monkeypatch):
+def test_export_all_cookies_to_clipboard_no_cookies(monkeypatch: Any) -> None:
     driver = MagicMock()
     driver.get_cookies.return_value = []
     logger = MagicMock()
@@ -118,13 +121,13 @@ def test_export_all_cookies_to_clipboard_no_cookies(monkeypatch):
 
 
 @pytest.mark.unit
-def test_export_all_cookies_to_clipboard_handles_copy_error(monkeypatch):
+def test_export_all_cookies_to_clipboard_handles_copy_error(monkeypatch: Any) -> None:
     driver = MagicMock()
     driver.get_cookies.return_value = [{"name": "n", "value": "v"}]
     logger = MagicMock()
     console = MagicMock()
 
-    def _mock_copy(_text):
+    def _mock_copy(_text: str) -> None:
         raise RuntimeError("copy failed")
 
     monkeypatch.setattr(
@@ -140,7 +143,7 @@ def test_export_all_cookies_to_clipboard_handles_copy_error(monkeypatch):
 
 
 @pytest.mark.unit
-def test_export_all_cookies_to_clipboard_handles_read_error():
+def test_export_all_cookies_to_clipboard_handles_read_error() -> None:
     driver = MagicMock()
     driver.get_cookies.side_effect = RuntimeError("read failed")
     logger = MagicMock()

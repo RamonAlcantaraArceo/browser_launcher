@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse, urlunparse
 
+import click
 import typer
 from r3a_logger.logger import (  # type: ignore[import-untyped]
     get_current_logger,
@@ -560,12 +561,10 @@ def cache_all_cookies_for_session(
 
     console.print(
         f"✅ Cached {saved_count} cookies from current browser session "
-        f"for {user}/{env}"
-        + (f" (skipped {skipped_count})" if skipped_count else "")
+        f"for {user}/{env}" + (f" (skipped {skipped_count})" if skipped_count else "")
     )
     logger.info(
-        f"Saved {saved_count} cookies for {user}/{env} "
-        f"(skipped={skipped_count})"
+        f"Saved {saved_count} cookies for {user}/{env} (skipped={skipped_count})"
     )
 
 
@@ -1231,13 +1230,9 @@ def launch(  # noqa: C901
                     "capture screenshot"
                 )
                 break
-            if sys.stdin.closed or not sys.stdin.isatty():
-                logger.debug(
-                    "Non-interactive environment detected; breaking out of input loop."
-                )
-                break
+
             try:
-                char = sys.stdin.read(1)
+                char = click.getchar()
             except ValueError as e:
                 logger.debug(f"stdin closed or unavailable: {e}")
                 break
